@@ -1,0 +1,98 @@
+# Seed fixture: system-scope Cedar policy template for Data Room access.
+#
+# ADR-0006 D21 / D22 / Q2 / I12 / PR E.
+#
+# This file is loaded by F4's policy-loader at boot to populate the
+# `acl.cedar_policies` Iceberg table with the canonical system-scope
+# `dataroom_access_via_grants` template. The `policy_source` field carries
+# the literal Cedar policy text (loaded from
+# cedar/policies/system/dataroom_access_via_grants.cedar via build-time
+# substitution OR inlined here — both shapes are accepted by the loader;
+# this fixture uses inline for portability and review traceability).
+#
+# Schema: matches acl.cedar_policies (iceberg/acl/cedar_policies.yaml).
+#
+# Cryptoshred note: system-scope rows have scope_id=null. F1 writer treats
+# null-scope rows as global-key (no per-workspace cryptoshred binding); this
+# is the documented behavior for `scope_type='system'`.
+
+- id: pol_01_sitidos_system_dataroom_access_via_grants
+  scope_type: system
+  scope_id: null
+  name: dataroom_access_via_grants
+  description: |
+    System-scope Cedar policy template authorizing Data Room access via
+    grants-derived principal attributes. F4's fact-builder populates the
+    principal's dataroom_{viewable,downloadable,manageable}_rooms set
+    attributes from the caller's matching dataroom.grants rows (filtered on
+    workspace + principal + not-revoked + not-expired + mcp_access=true for
+    MCP callers per Q1/I12). Covers actions:
+      - dataroom.document.view
+      - dataroom.document.download
+      - dataroom.room.manage
+      - dataroom.documents.list
+      - dataroom.rooms.list
+    Inheritance (manage ⊇ download ⊇ view) is encoded by the fact-builder,
+    not by Cedar. I6-compliant: no Sitidos-native role strings; the only
+    string literals are pre-computed-set attribute names.
+  policy_source: |
+    // dataroom_access_via_grants — Sitidos system-scope Cedar policy template.
+    // ADR-0006 D21 / D22 / Q2 / I12. See cedar/policies/system/dataroom_access_via_grants.cedar
+    // for the authoritative authored source (this is its inline mirror).
+
+    permit (
+      principal,
+      action == Sitidos::Action::"dataroom.document.view",
+      resource is Sitidos::Dataroom::Document
+    )
+    when {
+      principal.workspace_id == resource.workspace_id &&
+      resource.room in principal.dataroom_viewable_rooms
+    };
+
+    permit (
+      principal,
+      action == Sitidos::Action::"dataroom.document.download",
+      resource is Sitidos::Dataroom::Document
+    )
+    when {
+      principal.workspace_id == resource.workspace_id &&
+      resource.room in principal.dataroom_downloadable_rooms
+    };
+
+    permit (
+      principal,
+      action == Sitidos::Action::"dataroom.room.manage",
+      resource is Sitidos::Dataroom::Room
+    )
+    when {
+      principal.workspace_id == resource.workspace_id &&
+      resource in principal.dataroom_manageable_rooms
+    };
+
+    permit (
+      principal,
+      action == Sitidos::Action::"dataroom.documents.list",
+      resource is Sitidos::Dataroom::Room
+    )
+    when {
+      principal.workspace_id == resource.workspace_id &&
+      resource in principal.dataroom_viewable_rooms
+    };
+
+    permit (
+      principal,
+      action == Sitidos::Action::"dataroom.rooms.list",
+      resource is Sitidos::Workspace
+    )
+    when {
+      principal.workspace_id == resource.id &&
+      principal has dataroom_viewable_rooms
+    };
+  parameters_json: null
+  applies_to_source_connector: null
+  enabled: true
+  created_by_user_id: null
+  created_at: "2026-05-28T00:00:00Z"
+  updated_at: "2026-05-28T00:00:00Z"
+  deleted_at: null
