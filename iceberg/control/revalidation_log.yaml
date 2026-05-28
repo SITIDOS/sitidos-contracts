@@ -1,0 +1,30 @@
+namespace: control
+table: revalidation_log
+description: ISR revalidation receipts. One row per revalidateTag call by the revalidator sidecar. Audit trail + debugging for D7.
+partition_by: [days(triggered_at)]
+sort_by: [triggered_at]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; rev_..." }
+  - { name: tag, type: string, required: true, doc: "e.g., 'ws:wks_abc:dataroom', 'org:acme', 'user:usr_xyz:memberships'" }
+  - { name: triggering_entity_type, type: string, required: true, doc: "'org' | 'workspace' | 'user'" }
+  - { name: triggering_entity_id, type: string, required: true }
+  - { name: triggering_namespace, type: string, required: false }
+  - { name: cursor_at_trigger, type: long, required: false }
+  - { name: vercel_receipt_id, type: string, required: false }
+  - { name: cf_receipt_id, type: string, required: false }
+  - { name: outcome, type: string, required: true, doc: "'ok' | 'failed' | 'partial'" }
+  - { name: error, type: string, required: false }
+  - { name: latency_ms, type: int, required: false, doc: "Commit-to-edge-invalidation; target <800ms p95 per D7" }
+  - { name: triggered_at, type: timestamp, required: true }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: none
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_tag, columns: [tag], type: btree }
+  - { name: idx_outcome, columns: [outcome, triggered_at], type: btree }
+foreign_keys: []

@@ -1,0 +1,23 @@
+namespace: control
+table: gen_cursor
+description: |
+  Per-(entity_type, entity_id, namespace) monotonic counter. Bumped on any Iceberg write affecting that entity.
+  Drives ISR revalidation (D7) and SSE delta streams. Sort_by chosen for fast "next cursor" reads.
+partition_by: []
+sort_by: [entity_type, entity_id, namespace]
+schema:
+  - { name: entity_type, type: string, required: true, doc: "'org' | 'workspace' | 'user'" }
+  - { name: entity_id, type: string, required: true, doc: "FK to the corresponding entity table" }
+  - { name: namespace, type: string, required: true, doc: "Iceberg namespace; e.g., 'control', 'dataroom', 'identity', '__all__' for entity-level" }
+  - { name: cursor, type: long, required: true, doc: "Monotonic counter; only increments" }
+  - { name: bumped_at, type: timestamp, required: true }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: none
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_pk, columns: [entity_type, entity_id, namespace], type: btree }
+foreign_keys: []

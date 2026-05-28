@@ -1,0 +1,34 @@
+namespace: control
+table: appstore_audit
+description: Every enable / disable / opt-out / opt-in / role-mapping mutation in the App Store. Append-only audit log.
+partition_by: [days(occurred_at), bucket(8, scope_id)]
+sort_by: [occurred_at]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; aud_..." }
+  - { name: scope_type, type: string, required: true, doc: "'org' | 'workspace'" }
+  - { name: scope_id, type: string, required: true }
+  - { name: actor_user_id, type: string, required: true, doc: "FK control.users(id)" }
+  - { name: actor_claim_evidence, type: string, required: false, doc: "Which upstream claim authorized this action (or 'bootstrap_admin' per D17)" }
+  - { name: action, type: string, required: true, doc: "'enable' | 'disable' | 'add' | 'remove' | 'opt_out' | 'reinstate' | 'map_claim' | 'unmap_claim'" }
+  - { name: object_kind, type: string, required: true, doc: "'identity_connection' | 'data_source' | 'role_mapping'" }
+  - { name: object_id, type: string, required: true, doc: "FK to the relevant table row" }
+  - { name: catalog_id, type: string, required: false, doc: "FK to the appropriate catalog table; null for role mappings" }
+  - { name: before_state, type: string, required: false, doc: "JSON-encoded prior state" }
+  - { name: after_state, type: string, required: false, doc: "JSON-encoded new state" }
+  - { name: client_ip, type: string, required: false }
+  - { name: user_agent, type: string, required: false }
+  - { name: session_id, type: string, required: false }
+  - { name: occurred_at, type: timestamp, required: true }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_scope_time, columns: [scope_type, scope_id, occurred_at], type: btree }
+  - { name: idx_actor, columns: [actor_user_id, occurred_at], type: btree }
+foreign_keys:
+  - { columns: [actor_user_id], references: control.users(id) }

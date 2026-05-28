@@ -1,0 +1,27 @@
+namespace: control
+table: org_memberships
+description: User × Org membership existence. No role column (D14). Derived from Auth0 Organization membership mirror.
+partition_by: [bucket(16, org_id)]
+sort_by: [org_id, user_id]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; orgm_..." }
+  - { name: org_id, type: string, required: true, doc: "FK control.orgs(id)" }
+  - { name: user_id, type: string, required: true, doc: "FK control.users(id)" }
+  - { name: auth0_org_member_id, type: string, required: true, doc: "Auth0 Organization membership ref" }
+  - { name: derived_at, type: timestamp, required: true, doc: "Last reconciliation against Auth0" }
+  - { name: created_at, type: timestamp, required: true }
+  - { name: removed_at, type: timestamp, required: false }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: org
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_org_user, columns: [org_id, user_id], type: btree }
+  - { name: idx_user, columns: [user_id], type: btree }
+foreign_keys:
+  - { columns: [org_id], references: control.orgs(id) }
+  - { columns: [user_id], references: control.users(id) }

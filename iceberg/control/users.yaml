@@ -1,0 +1,29 @@
+namespace: control
+table: users
+description: Global user identity. 1:1 with Auth0 user record. Indexed for switcher and audit lookups. No native role columns (D14).
+partition_by: [days(created_at)]
+sort_by: [id]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; usr_..." }
+  - { name: auth0_user_id, type: string, required: true, doc: "auth0|... or oauth2|...; unique" }
+  - { name: email, type: string, required: true }
+  - { name: email_verified, type: boolean, required: true }
+  - { name: display_name, type: string, required: false }
+  - { name: picture_url, type: string, required: false }
+  - { name: locale, type: string, required: false }
+  - { name: last_login_at, type: timestamp, required: false }
+  - { name: created_at, type: timestamp, required: true }
+  - { name: updated_at, type: timestamp, required: true }
+  - { name: deleted_at, type: timestamp, required: false }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: none
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_auth0_user, columns: [auth0_user_id], type: btree }
+  - { name: idx_email, columns: [email], type: btree }
+foreign_keys: []

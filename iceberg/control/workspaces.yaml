@@ -1,0 +1,32 @@
+namespace: control
+table: workspaces
+description: Workspace (data + work surface). Cryptoshred unit per D4. Immutably bound to creating org per D15.
+partition_by: [days(created_at), bucket(16, org_id)]
+sort_by: [id]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; ws_..." }
+  - { name: org_id, type: string, required: true, doc: "FK control.orgs(id); immutable per D15" }
+  - { name: slug, type: string, required: true, doc: "URL path component; unique within org" }
+  - { name: display_name, type: string, required: true }
+  - { name: key_handle, type: string, required: true, doc: "OpenBao key ref: workspace/${id}/key" }
+  - { name: state, type: string, required: true, doc: "bootstrapping | operational | archived; per I7" }
+  - { name: gen_cursor, type: long, required: true, doc: "monotonic per workspace; drives SSE + ISR invalidation" }
+  - { name: created_by_user_id, type: string, required: true, doc: "FK control.users(id)" }
+  - { name: created_at, type: timestamp, required: true }
+  - { name: updated_at, type: timestamp, required: true }
+  - { name: archived_at, type: timestamp, required: false }
+  - { name: deleted_at, type: timestamp, required: false, doc: "Tombstone; key revoke happens at this point" }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: key_handle
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_org, columns: [org_id], type: btree }
+  - { name: idx_org_slug, columns: [org_id, slug], type: btree }
+foreign_keys:
+  - { columns: [org_id], references: control.orgs(id) }
+  - { columns: [created_by_user_id], references: control.users(id) }

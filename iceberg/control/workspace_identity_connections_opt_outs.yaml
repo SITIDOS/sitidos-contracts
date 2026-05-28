@@ -1,0 +1,26 @@
+namespace: control
+table: workspace_identity_connections_opt_outs
+description: Workspace-level opt-outs of org-inherited auth providers. Per Q2 (union + opt-out semantics).
+partition_by: [bucket(16, workspace_id)]
+sort_by: [workspace_id, org_connection_id]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; wsico_..." }
+  - { name: workspace_id, type: string, required: true, doc: "FK control.workspaces(id)" }
+  - { name: org_connection_id, type: string, required: true, doc: "FK control.org_identity_connections(id) being opted out" }
+  - { name: opted_out_by_user_id, type: string, required: true, doc: "FK control.users(id)" }
+  - { name: opted_out_at, type: timestamp, required: true }
+  - { name: reinstated_at, type: timestamp, required: false }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_ws, columns: [workspace_id], type: btree }
+foreign_keys:
+  - { columns: [workspace_id], references: control.workspaces(id) }
+  - { columns: [org_connection_id], references: control.org_identity_connections(id) }
+  - { columns: [opted_out_by_user_id], references: control.users(id) }
