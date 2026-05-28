@@ -1,7 +1,13 @@
 namespace: dataroom
 table: download_events
 description: |
-  Document download audit trail. One row per download attempt (successful or denied by policy).
+  Document download / access audit trail. One row per access attempt (successful or denied
+  by policy). Covers human-browser downloads, MCP / context.snapshot fetches, and RPC API
+  reads. The viewer_type column discriminates.
+
+  Per ADR-0006 I11: every MCP-side document access (signed-URL from context.snapshot OR
+  granular MCP tool fetch) MUST write a row here with viewer_type='mcp_client'. A snapshot
+  URL without a paired row is a bug.
 partition_by: [days(downloaded_at), bucket(16, workspace_id)]
 sort_by: [downloaded_at]
 schema:
@@ -9,12 +15,13 @@ schema:
   - { name: workspace_id, type: string, required: true }
   - { name: room_id, type: string, required: true }
   - { name: document_id, type: string, required: true }
+  - { name: viewer_type, type: string, required: true, doc: "'human_browser' | 'mcp_client' | 'rpc_api'. Added by ADR-0006 D24. Backfill: pre-ADR-0006 rows are read as 'human_browser' by F2 reader default." }
   - { name: viewer_user_id, type: string, required: false }
   - { name: viewer_email, type: string, required: false }
-  - { name: viewer_ip, type: string, required: false }
-  - { name: outcome, type: string, required: true, doc: "'allowed' | 'allowed_watermarked' | 'denied_policy' | 'denied_no_grant'" }
+  - { name: viewer_ip, type: string, required: false, doc: "Null for viewer_type='mcp_client' (no human IP)" }
+  - { name: outcome, type: string, required: true, doc: "'allowed' | 'allowed_watermarked' | 'denied_policy' | 'denied_no_grant' | 'denied_mcp_access'. The 'allowed_watermarked' value is only valid for viewer_type='human_browser'. The 'denied_mcp_access' value covers grant.mcp_access=false rejections (added by ADR-0006 D24/I12)." }
   - { name: bytes_served, type: long, required: false, doc: "Null when denied" }
-  - { name: watermark_event_id, type: string, required: false, doc: "Set when outcome='allowed_watermarked'" }
+  - { name: watermark_event_id, type: string, required: false, doc: "Set when outcome='allowed_watermarked'. Always null when viewer_type='mcp_client' (D24: MCP bypasses watermarking)." }
   - { name: downloaded_at, type: timestamp, required: true }
 properties:
   format-version: "2"
@@ -27,6 +34,7 @@ indexes_duckdb:
   - { name: idx_id, columns: [id], type: btree }
   - { name: idx_doc_time, columns: [document_id, downloaded_at], type: btree }
   - { name: idx_viewer_time, columns: [viewer_user_id, downloaded_at], type: btree }
+  - { name: idx_ws_viewer_type_time, columns: [workspace_id, viewer_type, downloaded_at], type: btree }
 foreign_keys:
   - { columns: [workspace_id], references: control.workspaces(id) }
   - { columns: [room_id], references: dataroom.rooms(id) }

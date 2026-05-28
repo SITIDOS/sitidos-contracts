@@ -3,6 +3,18 @@ table: cedar_policies
 description: |
   Cedar policy templates and per-workspace instantiations. Templates referenced from data_source_catalog.cedar_policy_template_ref.
   Per I6, no policy references Sitidos-native role strings; all parameterize over claim sets and inherited_grants rows.
+
+  ADR-0006 Q2 clarification: Policies for sitidos_native-contract resources (i.e. resources whose
+  data source uses permission_inheritance_contract='sitidos_native' per D21, such as Data Room)
+  MAY reference dataroom.grants rows directly via the `grants` entity collection in the Cedar
+  fact graph. The fact graph is built by F4's fact-builder injector (Q2/I12), which loads the
+  caller's matching dataroom.grants rows (filtered on workspace_id, principal, not-revoked,
+  not-expired, and — for MCP callers — mcp_access=true) and exposes them as Cedar entities so
+  policies can pattern-match on (room_id, permission). The single system-scope template
+  `dataroom_access_via_grants` (scope_type='system', name='dataroom_access_via_grants') is the
+  canonical reference implementation and is seeded by PR E. I6 still forbids policies that hard
+  -code Sitidos-native role string literals; referencing a dynamically-loaded grants entity
+  collection is NOT a native-role hardcode and is explicitly permitted under ADR-0006.
 partition_by: [bucket(8, scope_id)]
 sort_by: [scope_type, scope_id, name]
 schema:

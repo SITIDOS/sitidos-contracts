@@ -15,6 +15,7 @@ schema:
   - { name: principal_email, type: string, required: false, doc: "Lowercased; required if principal_type='email_invitee'" }
   - { name: invite_token_hash, type: string, required: false, doc: "SHA-256 of magic-link token; null for 'user' principals" }
   - { name: permission, type: string, required: true, doc: "'view' | 'download' | 'manage'" }
+  - { name: mcp_access, type: boolean, required: true, doc: "Per-grant MCP toggle (ADR-0006 Q1). When true, this grant is visible to MCP tools (dataroom.rooms.list, dataroom.documents.fetch, etc.) and to context.snapshot for this principal. When false, the grant is BROWSER-ONLY: MCP surface MUST filter out rooms/documents reachable solely via this grant, and context.snapshot MUST exclude them. Default is true (MCP-enabled) so the literal-fully-open default behavior holds; grant issuers (room managers) flip to false to restrict an individual recipient to human-browser access only. Note: mcp_access=false does NOT change watermark semantics — watermark application is keyed on viewer_type per D24, not on this column. F4 fact-builder reads this column; F5 MCP surface filters on this column; no other surface depends on it." }
   - { name: granted_by_user_id, type: string, required: true }
   - { name: granted_at, type: timestamp, required: true }
   - { name: expires_at, type: timestamp, required: false }
