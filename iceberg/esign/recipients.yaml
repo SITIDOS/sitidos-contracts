@@ -1,0 +1,36 @@
+namespace: esign
+table: recipients
+description: Document recipients (signers, viewers, approvers). One row per (document, recipient).
+partition_by: [bucket(16, document_id)]
+sort_by: [document_id, signing_order]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; rcp_..." }
+  - { name: document_id, type: string, required: true, doc: "FK esign.documents(id)" }
+  - { name: workspace_id, type: string, required: true, doc: "Denormalized; FK control.workspaces(id)" }
+  - { name: email, type: string, required: true }
+  - { name: name, type: string, required: false }
+  - { name: role, type: string, required: true, doc: "'signer' | 'viewer' | 'approver' | 'cc'" }
+  - { name: signing_order, type: int, required: true, doc: "1-based; for sequential workflows" }
+  - { name: status, type: string, required: true, doc: "'pending' | 'sent' | 'opened' | 'signed' | 'declined' | 'expired'" }
+  - { name: access_token_hash, type: string, required: true, doc: "SHA-256 of the magic link token; raw token never stored" }
+  - { name: notified_at, type: timestamp, required: false }
+  - { name: opened_at, type: timestamp, required: false }
+  - { name: signed_at, type: timestamp, required: false }
+  - { name: declined_at, type: timestamp, required: false }
+  - { name: decline_reason, type: string, required: false }
+  - { name: created_at, type: timestamp, required: true }
+  - { name: updated_at, type: timestamp, required: true }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_doc, columns: [document_id, signing_order], type: btree }
+  - { name: idx_email, columns: [email], type: btree }
+foreign_keys:
+  - { columns: [document_id], references: esign.documents(id) }
+  - { columns: [workspace_id], references: control.workspaces(id) }

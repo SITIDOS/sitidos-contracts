@@ -1,0 +1,34 @@
+namespace: acl
+table: cedar_policies
+description: |
+  Cedar policy templates and per-workspace instantiations. Templates referenced from data_source_catalog.cedar_policy_template_ref.
+  Per I6, no policy references Sitidos-native role strings; all parameterize over claim sets and inherited_grants rows.
+partition_by: [bucket(8, scope_id)]
+sort_by: [scope_type, scope_id, name]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; pol_..." }
+  - { name: scope_type, type: string, required: true, doc: "'system' (sitidos-shipped template) | 'org' | 'workspace'" }
+  - { name: scope_id, type: string, required: false, doc: "FK control.orgs(id) or control.workspaces(id); null for system" }
+  - { name: name, type: string, required: true, doc: "Stable identifier; e.g., 'dataverse_read_inherits_entra'" }
+  - { name: description, type: string, required: false }
+  - { name: policy_source, type: string, required: true, doc: "Cedar policy text" }
+  - { name: parameters_json, type: string, required: false, doc: "JSON Schema of template parameters" }
+  - { name: applies_to_source_connector, type: string, required: false, doc: "If set, policy applies only when source_connector matches" }
+  - { name: enabled, type: boolean, required: true }
+  - { name: created_by_user_id, type: string, required: false }
+  - { name: created_at, type: timestamp, required: true }
+  - { name: updated_at, type: timestamp, required: true }
+  - { name: deleted_at, type: timestamp, required: false }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_scope_name, columns: [scope_type, scope_id, name], type: btree }
+  - { name: idx_connector, columns: [applies_to_source_connector], type: btree }
+foreign_keys:
+  - { columns: [created_by_user_id], references: control.users(id) }

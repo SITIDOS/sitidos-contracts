@@ -1,0 +1,45 @@
+namespace: acl
+table: inherited_grants
+description: |
+  Generalized cache of upstream-inherited grants. Per D14 there are no Sitidos-native role/permission rows;
+  this table stores rows derived from external sources (auth providers, data-source-native ACLs).
+  
+  Per D9b on-demand semantics: rows here are advisory only. The hot path at MCP-call time re-evaluates
+  against upstream when permission_inheritance_contract in {source_native_acl, idp_passthrough}.
+  
+  This is also where bootstrapped/fallback grants land for un-onboarded sources (D10 relaxation).
+partition_by: [bucket(16, workspace_id), days(derived_at)]
+sort_by: [workspace_id, principal_user_id, source_connector]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; gnt_..." }
+  - { name: workspace_id, type: string, required: true, doc: "FK control.workspaces(id)" }
+  - { name: principal_user_id, type: string, required: true, doc: "FK control.users(id)" }
+  - { name: grant_kind, type: string, required: true, doc: "'role' | 'permission'" }
+  - { name: source_connector, type: string, required: true, doc: "Provider/source id; e.g., 'entra', 'google', 'okta', 'saml', 'dataverse', 'postgres', 'gdrive', 'bootstrap'" }
+  - { name: source_kind, type: string, required: true, doc: "'auth_provider' | 'data_source' | 'system'" }
+  - { name: connection_ref, type: string, required: false, doc: "FK to org_identity_connections / workspace_*_added / org_data_sources / workspace_*_added" }
+  - { name: resource_kind, type: string, required: true, doc: "'workspace' | 'entity' | 'record' | 'bucket' | 'database' | 'tool' (for role grants on tool surface)" }
+  - { name: resource_id, type: string, required: false, doc: "Source-native id (e.g., Dataverse accountid GUID); null for workspace-wide grants" }
+  - { name: action_set_json, type: string, required: true, doc: "JSON array of actions/scopes; e.g., ['read'], ['read','write'], ['mcp:dataverse.read']" }
+  - { name: evidence_claim, type: string, required: false, doc: "Upstream claim or ACL entry that produced this grant (for grant_kind='role')" }
+  - { name: evidence_session_id, type: string, required: false, doc: "FK identity.sessions(id) when role-derived from session" }
+  - { name: evidence_change_token, type: string, required: false, doc: "Upstream change cursor / etag for permission-derived rows" }
+  - { name: derived_at, type: timestamp, required: true }
+  - { name: lease_until, type: timestamp, required: true, doc: "After this Cedar must re-evaluate against live upstream for I3 contracts" }
+  - { name: revoked_at, type: timestamp, required: false }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_ws_user_kind, columns: [workspace_id, principal_user_id, grant_kind], type: btree }
+  - { name: idx_ws_resource, columns: [workspace_id, resource_kind, resource_id], type: btree }
+  - { name: idx_source, columns: [source_connector, source_kind], type: btree }
+  - { name: idx_lease, columns: [lease_until], type: btree, doc: "Stale-row sweeper" }
+foreign_keys:
+  - { columns: [workspace_id], references: control.workspaces(id) }
+  - { columns: [principal_user_id], references: control.users(id) }

@@ -1,0 +1,40 @@
+namespace: esign
+table: documents
+description: |
+  Documents flowing through e-sign workflows. Backed by the Documenso fork's Prisma-Iceberg adapter (sitidos-esign repo,
+  AGPL, private). Mirrors Documenso's Document model adapted for Iceberg semantics (no jsonb; explicit columns + JSON-string blobs).
+  Tier-1 single-signer documents are also recorded here (router pattern from ADR-0005 §F11).
+partition_by: [days(created_at), bucket(16, workspace_id)]
+sort_by: [created_at]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; doc_..." }
+  - { name: workspace_id, type: string, required: true, doc: "FK control.workspaces(id); cryptoshred unit" }
+  - { name: owner_user_id, type: string, required: true, doc: "FK control.users(id)" }
+  - { name: title, type: string, required: true }
+  - { name: status, type: string, required: true, doc: "'draft' | 'pending' | 'in_progress' | 'completed' | 'cancelled' | 'expired'" }
+  - { name: tier, type: string, required: true, doc: "'tier_1_pdf_lib' | 'tier_2_documenso'; router output" }
+  - { name: document_data_ref, type: string, required: true, doc: "R2 path: ${workspace_id}/esign/documents/${id}/original.pdf" }
+  - { name: signed_data_ref, type: string, required: false, doc: "R2 path to final signed PDF; null until completed" }
+  - { name: template_id, type: string, required: false, doc: "FK esign.templates(id)" }
+  - { name: external_id, type: string, required: false, doc: "Caller-supplied id for webhook correlation" }
+  - { name: workflow_metadata_json, type: string, required: false, doc: "Multi-signer order, reminder cadence, etc." }
+  - { name: completed_at, type: timestamp, required: false }
+  - { name: cancelled_at, type: timestamp, required: false }
+  - { name: expires_at, type: timestamp, required: false }
+  - { name: created_at, type: timestamp, required: true }
+  - { name: updated_at, type: timestamp, required: true }
+  - { name: deleted_at, type: timestamp, required: false }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_ws_status, columns: [workspace_id, status], type: btree }
+  - { name: idx_owner_time, columns: [owner_user_id, created_at], type: btree }
+foreign_keys:
+  - { columns: [workspace_id], references: control.workspaces(id) }
+  - { columns: [owner_user_id], references: control.users(id) }
