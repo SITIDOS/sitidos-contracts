@@ -1,0 +1,385 @@
+openapi: 3.1.0
+info:
+  title: Sitidos RPC
+  version: 0.1.0
+  description: |
+    Public HTTP / RPC surface of Sitidos. Owned by F3 (sitidos-rpc).
+    Consumed by the website and any non-MCP integrator via the generated
+    `@sitidos/rpc-client` TypeScript SDK.
+
+    Errors are always returned as `{ code, message, retriable }`. `message`
+    is intentionally neutral and MUST NOT include role names or upstream
+    identity-broker names (per _LAWS.md D13 + D14).
+servers:
+  - url: https://rpc.sitidos.app
+    description: Production
+  - url: http://localhost:8787
+    description: Local dev (wrangler)
+security:
+  - bearerAuth: []
+tags:
+  - name: workspaces
+  - name: memberships
+  - name: orgs
+  - name: esign
+  - name: dataroom
+  - name: catalog
+  - name: identity
+  - name: me
+  - name: events
+paths:
+  /healthz:
+    get:
+      operationId: healthz
+      summary: Liveness check
+      security: []
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { ok: { type: boolean } }
+                required: [ok]
+
+  /v1/workspaces:
+    get:
+      tags: [workspaces]
+      operationId: workspaces.list
+      parameters:
+        - in: query
+          name: org_id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/WorkspaceList" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/NotAuthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    post:
+      tags: [workspaces]
+      operationId: workspaces.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                org_id: { type: string }
+                name: { type: string, minLength: 1, maxLength: 120 }
+              required: [org_id, name]
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Workspace" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/NotAuthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/memberships:
+    get:
+      tags: [memberships]
+      operationId: memberships.list
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  memberships:
+                    type: array
+                    items: { $ref: "#/components/schemas/Membership" }
+                required: [memberships]
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/NotAuthorized" }
+
+  /v1/memberships/switch:
+    post:
+      tags: [memberships]
+      operationId: memberships.switch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                org_id: { type: string }
+                workspace_id: { type: string }
+              required: [org_id, workspace_id]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  org_id: { type: string }
+                  workspace_id: { type: string }
+                  reissue_required: { type: boolean }
+                required: [org_id, workspace_id, reissue_required]
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/NotAuthorized" }
+
+  /v1/orgs:
+    get:
+      tags: [orgs]
+      operationId: orgs.list
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orgs:
+                    type: array
+                    items: { $ref: "#/components/schemas/Org" }
+                required: [orgs]
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/NotAuthorized" }
+
+  /v1/esign/documents:
+    get:
+      tags: [esign]
+      operationId: esign.documents.list
+      parameters:
+        - in: query
+          name: workspace_id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workspace_id: { type: string }
+                  documents:
+                    type: array
+                    items: { $ref: "#/components/schemas/EsignDocument" }
+                required: [workspace_id, documents]
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/NotAuthorized" }
+
+  /v1/dataroom/rooms:
+    get:
+      tags: [dataroom]
+      operationId: dataroom.rooms.list
+      parameters:
+        - in: query
+          name: workspace_id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workspace_id: { type: string }
+                  rooms:
+                    type: array
+                    items: { $ref: "#/components/schemas/DataroomRoom" }
+                required: [workspace_id, rooms]
+
+  /v1/catalog/entries:
+    get:
+      tags: [catalog]
+      operationId: catalog.entries.list
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    items: { $ref: "#/components/schemas/CatalogEntry" }
+                required: [entries]
+
+  /v1/identity/connections:
+    get:
+      tags: [identity]
+      operationId: identity.connections.list
+      parameters:
+        - in: query
+          name: workspace_id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workspace_id: { type: string }
+                  connections:
+                    type: array
+                    items: { $ref: "#/components/schemas/IdentityConnection" }
+                required: [workspace_id, connections]
+
+  /v1/me/profile:
+    get:
+      tags: [me]
+      operationId: me.profile
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MeProfile" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /v1/events/revalidate:
+    get:
+      tags: [events]
+      operationId: events.revalidate.subscribe
+      description: |
+        Server-Sent Events stream of revalidation events for F17 (ISR bus).
+        Events follow the canonical RevalidationEvent shape; tags adhere to
+        the _LAWS.md D7 taxonomy.
+      responses:
+        "200":
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema: { type: string }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    RpcError:
+      type: object
+      required: [code, message, retriable]
+      properties:
+        code:
+          type: string
+          enum:
+            - unauthenticated
+            - not_authorized
+            - not_found
+            - invalid_request
+            - rate_limited
+            - upstream_unavailable
+            - internal
+        message: { type: string, description: "Neutral; never role/provider names" }
+        retriable: { type: boolean }
+    Workspace:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        org_id: { type: string }
+    Membership:
+      type: object
+      required: [org_id, org_slug, role_claim]
+      properties:
+        org_id: { type: string }
+        org_slug: { type: string }
+        role_claim: { type: string, description: "Opaque upstream claim key (D14)" }
+    Org:
+      type: object
+      required: [id, slug]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+    EsignDocument:
+      type: object
+      required: [id, title, status]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        status: { type: string }
+    DataroomRoom:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+    CatalogEntry:
+      type: object
+      required: [source_prefix, permission_inheritance_contract]
+      properties:
+        source_prefix: { type: string }
+        permission_inheritance_contract:
+          type: string
+          enum: [idp_inherited, source_native_acl, idp_passthrough]
+          description: |
+            `sitidos_native` is intentionally excluded per I10 + D25 —
+            default sources do not appear in the catalog.
+    IdentityConnection:
+      type: object
+      required: [id, issuer, display_name]
+      properties:
+        id: { type: string }
+        issuer:
+          type: string
+          format: uri
+          description: "Opaque issuer URL (D13 — provider not named)"
+        display_name: { type: string }
+    MeProfile:
+      type: object
+      required: [user_id, role_claim_count]
+      properties:
+        user_id: { type: string }
+        org_id: { type: [string, "null"] }
+        workspace_id: { type: [string, "null"] }
+        role_claim_count: { type: integer, minimum: 0 }
+  responses:
+    WorkspaceList:
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [org_id, workspaces]
+            properties:
+              org_id: { type: string }
+              workspaces:
+                type: array
+                items: { $ref: "#/components/schemas/Workspace" }
+    Unauthenticated:
+      description: Missing or invalid bearer token
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/RpcError" }
+    NotAuthorized:
+      description: PDP denied
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/RpcError" }
+    InvalidRequest:
+      description: Request validation failed
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/RpcError" }
+    RateLimited:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/RpcError" }
