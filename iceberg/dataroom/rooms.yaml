@@ -1,0 +1,35 @@
+namespace: dataroom
+table: rooms
+description: |
+  Virtual data rooms — workspace-scoped containers for documents shared with internal/external parties.
+  Each room enforces watermarking, download policy, and Cedar grants distinct from parent workspace.
+partition_by: [bucket(16, workspace_id)]
+sort_by: [created_at]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; room_..." }
+  - { name: workspace_id, type: string, required: true }
+  - { name: owner_user_id, type: string, required: true }
+  - { name: name, type: string, required: true }
+  - { name: description, type: string, required: false }
+  - { name: status, type: string, required: true, doc: "'draft' | 'active' | 'closed' | 'archived'" }
+  - { name: watermark_policy, type: string, required: true, doc: "'none' | 'viewer_email' | 'viewer_email_and_time' | 'custom'" }
+  - { name: watermark_template, type: string, required: false, doc: "Mustache template; e.g. '{{user.email}} | {{timestamp}}'" }
+  - { name: download_policy, type: string, required: true, doc: "'forbidden' | 'allowed' | 'allowed_watermarked'" }
+  - { name: expires_at, type: timestamp, required: false }
+  - { name: closed_at, type: timestamp, required: false }
+  - { name: created_at, type: timestamp, required: true }
+  - { name: updated_at, type: timestamp, required: true }
+  - { name: deleted_at, type: timestamp, required: false }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_ws_status, columns: [workspace_id, status], type: btree }
+foreign_keys:
+  - { columns: [workspace_id], references: control.workspaces(id) }
+  - { columns: [owner_user_id], references: control.users(id) }

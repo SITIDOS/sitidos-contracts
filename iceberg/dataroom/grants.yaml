@@ -1,0 +1,42 @@
+namespace: dataroom
+table: grants
+description: |
+  Per-room, per-principal access grants. Principals can be sitidos users (control.users) or external
+  email invitees (not yet sitidos users — magic-link auth via auth0 passwordless connection).
+  Distinct from acl.inherited_grants because data rooms are sitidos-native ACL (not upstream-inherited).
+partition_by: [bucket(16, workspace_id)]
+sort_by: [room_id, granted_at]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; drgr_..." }
+  - { name: room_id, type: string, required: true }
+  - { name: workspace_id, type: string, required: true }
+  - { name: principal_type, type: string, required: true, doc: "'user' | 'email_invitee'" }
+  - { name: principal_user_id, type: string, required: false, doc: "FK control.users(id); required if principal_type='user'" }
+  - { name: principal_email, type: string, required: false, doc: "Lowercased; required if principal_type='email_invitee'" }
+  - { name: invite_token_hash, type: string, required: false, doc: "SHA-256 of magic-link token; null for 'user' principals" }
+  - { name: permission, type: string, required: true, doc: "'view' | 'download' | 'manage'" }
+  - { name: granted_by_user_id, type: string, required: true }
+  - { name: granted_at, type: timestamp, required: true }
+  - { name: expires_at, type: timestamp, required: false }
+  - { name: revoked_at, type: timestamp, required: false }
+  - { name: revoked_by_user_id, type: string, required: false }
+  - { name: first_accessed_at, type: timestamp, required: false }
+  - { name: last_accessed_at, type: timestamp, required: false }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_room_principal, columns: [room_id, principal_user_id], type: btree }
+  - { name: idx_room_email, columns: [room_id, principal_email], type: btree }
+  - { name: idx_invite_token, columns: [invite_token_hash], type: btree }
+foreign_keys:
+  - { columns: [room_id], references: dataroom.rooms(id) }
+  - { columns: [workspace_id], references: control.workspaces(id) }
+  - { columns: [principal_user_id], references: control.users(id) }
+  - { columns: [granted_by_user_id], references: control.users(id) }
+  - { columns: [revoked_by_user_id], references: control.users(id) }

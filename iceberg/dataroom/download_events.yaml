@@ -1,0 +1,35 @@
+namespace: dataroom
+table: download_events
+description: |
+  Document download audit trail. One row per download attempt (successful or denied by policy).
+partition_by: [days(downloaded_at), bucket(16, workspace_id)]
+sort_by: [downloaded_at]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; dl_..." }
+  - { name: workspace_id, type: string, required: true }
+  - { name: room_id, type: string, required: true }
+  - { name: document_id, type: string, required: true }
+  - { name: viewer_user_id, type: string, required: false }
+  - { name: viewer_email, type: string, required: false }
+  - { name: viewer_ip, type: string, required: false }
+  - { name: outcome, type: string, required: true, doc: "'allowed' | 'allowed_watermarked' | 'denied_policy' | 'denied_no_grant'" }
+  - { name: bytes_served, type: long, required: false, doc: "Null when denied" }
+  - { name: watermark_event_id, type: string, required: false, doc: "Set when outcome='allowed_watermarked'" }
+  - { name: downloaded_at, type: timestamp, required: true }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_doc_time, columns: [document_id, downloaded_at], type: btree }
+  - { name: idx_viewer_time, columns: [viewer_user_id, downloaded_at], type: btree }
+foreign_keys:
+  - { columns: [workspace_id], references: control.workspaces(id) }
+  - { columns: [room_id], references: dataroom.rooms(id) }
+  - { columns: [document_id], references: dataroom.documents(id) }
+  - { columns: [viewer_user_id], references: control.users(id) }
+  - { columns: [watermark_event_id], references: dataroom.watermark_events(id) }

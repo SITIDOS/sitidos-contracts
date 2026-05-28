@@ -1,0 +1,41 @@
+namespace: obs
+table: error_groups
+description: |
+  Sentry-style error grouping. Sentry SaaS remains primary error-tracking surface (per stack delta),
+  but error fingerprints are also mirrored here so F16 V-Observability can show
+  workspace-scoped error aggregates without leaving the sitidos UI.
+  One row per (fingerprint, workspace_id) tuple; updated via merge-on-write.
+partition_by: [bucket(16, workspace_id)]
+sort_by: [last_seen_at]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; err_..." }
+  - { name: workspace_id, type: string, required: false }
+  - { name: org_id, type: string, required: false }
+  - { name: service, type: string, required: true }
+  - { name: fingerprint, type: string, required: true, doc: "Stable hash of error type + frame signature" }
+  - { name: title, type: string, required: true }
+  - { name: exception_type, type: string, required: true }
+  - { name: exception_message, type: string, required: false }
+  - { name: status, type: string, required: true, doc: "'unresolved' | 'resolved' | 'ignored' | 'archived'" }
+  - { name: level, type: string, required: true, doc: "'fatal' | 'error' | 'warning' | 'info' | 'debug'" }
+  - { name: occurrence_count, type: long, required: true }
+  - { name: affected_users_count, type: long, required: true }
+  - { name: first_seen_at, type: timestamp, required: true }
+  - { name: last_seen_at, type: timestamp, required: true }
+  - { name: sentry_issue_id, type: string, required: false, doc: "Cross-ref to Sentry SaaS issue" }
+  - { name: latest_trace_id, type: string, required: false, doc: "Most recent OTel trace observing this error" }
+  - { name: latest_event_attributes_json, type: string, required: false }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_fingerprint, columns: [workspace_id, fingerprint], type: btree }
+  - { name: idx_status_seen, columns: [workspace_id, status, last_seen_at], type: btree }
+foreign_keys:
+  - { columns: [workspace_id], references: control.workspaces(id) }
+  - { columns: [org_id], references: control.orgs(id) }

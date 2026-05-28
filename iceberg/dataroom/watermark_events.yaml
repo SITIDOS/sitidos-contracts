@@ -1,0 +1,36 @@
+namespace: dataroom
+table: watermark_events
+description: |
+  Watermark application audit trail. One row per (document, viewer, render_request).
+  Powers data-room forensics: "who viewed which document when, with which watermark applied."
+partition_by: [days(rendered_at), bucket(16, workspace_id)]
+sort_by: [rendered_at]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; wm_..." }
+  - { name: workspace_id, type: string, required: true }
+  - { name: room_id, type: string, required: true }
+  - { name: document_id, type: string, required: true }
+  - { name: viewer_user_id, type: string, required: false }
+  - { name: viewer_email, type: string, required: false, doc: "For email_invitee principals" }
+  - { name: viewer_ip, type: string, required: false }
+  - { name: viewer_user_agent, type: string, required: false }
+  - { name: watermark_template_rendered, type: string, required: true, doc: "Actual watermark text applied" }
+  - { name: rendered_at, type: timestamp, required: true }
+  - { name: rendered_r2_key, type: string, required: false, doc: "Cache path; null if streamed non-cached" }
+  - { name: render_duration_ms, type: int, required: false }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_doc_time, columns: [document_id, rendered_at], type: btree }
+  - { name: idx_viewer_time, columns: [viewer_user_id, rendered_at], type: btree }
+foreign_keys:
+  - { columns: [workspace_id], references: control.workspaces(id) }
+  - { columns: [room_id], references: dataroom.rooms(id) }
+  - { columns: [document_id], references: dataroom.documents(id) }
+  - { columns: [viewer_user_id], references: control.users(id) }
