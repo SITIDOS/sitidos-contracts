@@ -26,3 +26,16 @@ jobs:
         run: pip install --quiet pyyaml==6.0.2
       - name: Run ADR-0006 linter (strict)
         run: python3 scripts/lint_adr_0006.py --strict
+
+  adr-0007:
+    name: ADR-0007 Opus 4.8 + autonomy linter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pyyaml
+        run: pip install --quiet pyyaml==6.0.2
+      - name: Run ADR-0007 linter (strict)
+        run: python3 scripts/lint_adr_0007.py --strict

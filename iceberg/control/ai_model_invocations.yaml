@@ -1,0 +1,72 @@
+namespace: control
+table: ai_model_invocations
+description: |
+  Append-only audit log of every Anthropic API call originating from Sitidos. One row per
+  cycle (I18): for single-shot chat surfaces, cycle_index=0 and that's the only row; for
+  tool_loop / autonomous runs, one row per model iteration within the run.
+
+  Used for:
+  - Per-workspace cost attribution / billing pass-through.
+  - Drift detection (rows where model_used != ai_model_law.current_canonical_alias AND
+    override_active=false are I13 violations — alert).
+  - Cancellation enforcement (D32): wrapper polls control/ai_run_cancellations between
+    cycles; on cancel, final row gets stop_reason='cancelled', cancelled_at, cancel_reason.
+  - Budget enforcement (D31): wrapper aggregates by run_id to compute remaining budget.
+  - Sub-agent tree accounting (I19): wrapper traverses parent_run_id chain to compute
+    tree-wide budget consumption.
+  - Refusal analytics (D38): refusal_category populated when stop_reason='refusal'.
+  - I20/I21/I22 lint evidence: effort_used, fast_mode_used, adaptive_thinking_triggered
+    columns capture wrapper compliance with D33/D34/D35.
+
+  Append-only: never UPDATE, never DELETE. Cryptoshredded per-workspace per D4: deleting
+  the workspace key cryptoshreds the ability to replay AI invocations on that workspace's
+  behalf.
+partition_by: [days(ts), bucket(32, workspace_id)]
+sort_by: [workspace_id, ts]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; aimi_..." }
+  - { name: ts, type: timestamp, required: true, doc: "Anthropic call completion time." }
+  - { name: workspace_id, type: string, required: false, doc: "FK control.workspaces(id). Null for org-level surfaces (parity orchestrator, control-plane summarization)." }
+  - { name: org_id, type: string, required: false, doc: "FK control.orgs(id). Set when workspace_id is null (org-level call) or alongside workspace_id for fan-out reporting." }
+  - { name: surface, type: string, required: true, doc: "Identifies the calling AI surface. Examples: 'mcp', 'parity_orchestrator', 'f4', 'f5', 'f19', 'f20', 'onboarding_assistant'." }
+  - { name: autonomy_level, type: string, required: true, doc: "D30: 'chat'|'tool_loop'|'autonomous'." }
+  - { name: run_id, type: string, required: true, doc: "Stable id for the entire run (UUID). For chat, equals the single-call id. For tool_loop/autonomous, shared across all cycle rows." }
+  - { name: parent_run_id, type: string, required: false, doc: "I19: set when this run was spawned as a sub-agent. Null for root runs. Wrapper walks this chain to compute tree budget." }
+  - { name: cycle_index, type: int, required: true, doc: "I18: 0-based cycle index within run_id. chat=0 always; autonomous loops increment per Anthropic call." }
+  - { name: model_used, type: string, required: true, doc: "Exact model id passed to Anthropic SDK. Compared against ai_model_law.current_canonical_alias for I13 violation detection." }
+  - { name: model_pinned_id, type: string, required: false, doc: "ai_model_law.pinned_dated_id at call time (snapshot for reproducibility). Null in non-prod when alias is used." }
+  - { name: override_active, type: boolean, required: true, doc: "True when SITIDOS_AI_MODEL_OVERRIDE env was honored (D29 — non-prod only). Rows where this=true are NOT I13 violations even if model_used differs from canonical." }
+  - { name: effort_used, type: string, required: true, doc: "D34: 'high'|'medium'|'low' effort value passed in this call." }
+  - { name: fast_mode_used, type: boolean, required: true, doc: "D33: whether speed='fast' was passed. Should be true except for opt-out surfaces." }
+  - { name: adaptive_thinking_triggered, type: boolean, required: true, doc: "Whether the model actually decided to think on this cycle (resp.usage.thinking_tokens > 0). Adaptive thinking (D35) means the model picks per turn." }
+  - { name: refusal_category, type: string, required: false, doc: "D38: stop_details.category from Anthropic when stop_reason='refusal'. Null otherwise." }
+  - { name: prompt_tokens, type: int, required: true, doc: "resp.usage.input_tokens." }
+  - { name: completion_tokens, type: int, required: true, doc: "resp.usage.output_tokens." }
+  - { name: cache_hit_tokens, type: int, required: true, doc: "resp.usage.cache_read_input_tokens. Lower = lower cost." }
+  - { name: cache_write_tokens, type: int, required: true, doc: "resp.usage.cache_creation_input_tokens." }
+  - { name: latency_ms, type: int, required: true, doc: "Wall-clock from request send to response receive." }
+  - { name: cost_usd, type: decimal(12,6), required: true, doc: "Computed against Anthropic pricing snapshot for the model + speed + cache split." }
+  - { name: request_id, type: string, required: true, doc: "Anthropic request_id from resp.id; supports per-call lookups in Anthropic console." }
+  - { name: tool_calls_in_cycle, type: int, required: true, doc: "Count of tool invocations the model emitted in this cycle (0 for chat / stop_reason=end_turn cycles)." }
+  - { name: tools_invoked, type: "list<string>", required: true, doc: "Tool ids the model called in this cycle. Empty list when tool_calls_in_cycle=0." }
+  - { name: stop_reason, type: string, required: true, doc: "Anthropic stop_reason verbatim, plus Sitidos additions: 'end_turn'|'max_tokens'|'tool_use'|'refusal'|'budget_exhausted'|'cancelled'|'error'." }
+  - { name: cancelled_at, type: timestamp, required: false, doc: "D32: set when stop_reason='cancelled'." }
+  - { name: cancel_reason, type: string, required: false, doc: "D32: free-text reason from control/ai_run_cancellations.reason." }
+  - { name: mid_conv_system_msgs_count, type: int, required: true, doc: "D37: count of role='system' messages injected mid-conversation up to and including this cycle. Cumulative within run_id." }
+  - { name: created_at, type: timestamp, required: true }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: workspace_id
+indexes_duckdb:
+  - { name: idx_ws_ts, columns: [workspace_id, ts], type: btree }
+  - { name: idx_run_cycle, columns: [run_id, cycle_index], type: btree }
+  - { name: idx_model_ts, columns: [model_used, ts], type: btree, doc: "For I13 drift detection queries." }
+  - { name: idx_parent_run, columns: [parent_run_id], type: btree, doc: "For sub-agent tree traversal per I19." }
+  - { name: idx_surface_ts, columns: [surface, ts], type: btree, doc: "For per-surface cost/usage reports." }
+foreign_keys:
+  - { columns: [workspace_id], references: control.workspaces(id) }
+  - { columns: [org_id], references: control.orgs(id) }

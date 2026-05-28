@@ -1,0 +1,43 @@
+namespace: control
+table: ai_run_cancellations
+description: |
+  Kill-switch queue per ADR-0007 D32. Workspace admins and org admins write rows here to
+  cancel active autonomous / tool_loop runs.
+
+  Wrapper enforcement: between every cycle of a tool_loop / autonomous run, the wrapper
+  polls this table for run_id matches with acknowledged_at IS NULL. On match:
+  - Issue no new tool calls.
+  - Let in-flight tool call (if any) finish.
+  - Write final control/ai_model_invocations row with stop_reason='cancelled',
+    cancelled_at=now, cancel_reason=this row's reason.
+  - UPDATE this row's acknowledged_at to mark cancellation honored.
+
+  Sub-agent cancellation: cancelling a parent run by run_id cascades — the wrapper, when
+  walking the run tree, treats any descendant whose ancestor chain contains a cancelled
+  run as cancelled. Cancellation rows for individual sub-agent run_ids are also honored.
+
+  Append-only: never DELETE. acknowledged_at is the only field UPDATEd.
+partition_by: [days(requested_at)]
+sort_by: [requested_at, run_id]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; aircn_..." }
+  - { name: run_id, type: string, required: true, doc: "The run_id to cancel. Matches control/ai_model_invocations.run_id. Sub-agent runs are cancellable individually by their own run_id; parent cancellation cascades by run-tree traversal at poll time." }
+  - { name: requested_at, type: timestamp, required: true, doc: "When the cancellation request was written." }
+  - { name: requested_by_user_id, type: string, required: true, doc: "FK control.users(id). Who requested cancellation (workspace admin or org admin)." }
+  - { name: requested_by_scope, type: string, required: true, doc: "'workspace_admin'|'org_admin'|'system'. System cancellations come from automated safety triggers (e.g., budget alarm)." }
+  - { name: reason, type: string, required: true, doc: "Free-text reason; surfaced in the final ai_model_invocations row's cancel_reason column." }
+  - { name: acknowledged_at, type: timestamp, required: false, doc: "Set by wrapper when cancellation has been honored (final ai_model_invocations row written). Null = pending. Polled by UI to show 'Cancellation in progress' vs 'Cancelled'." }
+  - { name: created_at, type: timestamp, required: true }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: none
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_run_pending, columns: [run_id, acknowledged_at], type: btree, doc: "Wrapper poll path: WHERE run_id=? AND acknowledged_at IS NULL." }
+  - { name: idx_requested_at, columns: [requested_at], type: btree }
+foreign_keys:
+  - { columns: [requested_by_user_id], references: control.users(id) }

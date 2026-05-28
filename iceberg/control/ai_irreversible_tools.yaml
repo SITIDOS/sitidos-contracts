@@ -1,0 +1,49 @@
+namespace: control
+table: ai_irreversible_tools
+description: |
+  Registry of MCP tools that are HARD-PROTECTED from autonomous loops per ADR-0007 I16.
+  Tools in this table CANNOT be invoked from an autonomous run regardless of:
+  - the tool's own autonomy_safe flag,
+  - the workspace's policy in control/workspace_ai_tool_policy,
+  - the autonomy_level of the surface.
+
+  Wrapper enforcement: at tool-dispatch time, the wrapper checks this table; any row match
+  for an active autonomous run = tool call is rejected with stop_reason='error' on that
+  cycle and the run continues (model can re-decide). For tool_loop runs, the wrapper
+  surfaces the tool to the human caller with a "requires confirmation" flag.
+
+  Initial state: EMPTY (founder choice 2026-05-29). Tools added per-tool as MCP surface
+  lands. Lint rule R7 forces every new MCP-tool PR to either appear here OR explicitly
+  assert autonomy_safe=true with a one-line justification comment.
+
+  Examples of tools that BELONG here once they exist (not seeded — listed for guidance):
+  - dataroom.delete_room
+  - dataroom.revoke_all_grants
+  - esign.send_to_counterparty
+  - org.delete
+  - workspace.delete
+  - billing.* (entire namespace)
+
+  Adding a tool is a normal PR; removing a tool requires ADR amendment (irreversible
+  registry membership cannot be silently rolled back).
+partition_by: []
+sort_by: [tool_id]
+schema:
+  - { name: tool_id, type: string, required: true, doc: "Fully-qualified MCP tool id; e.g., 'dataroom.delete_room'. Primary key." }
+  - { name: namespace, type: string, required: true, doc: "Tool namespace; e.g., 'dataroom', 'esign', 'billing'. Indexed for namespace-wide queries." }
+  - { name: reason, type: string, required: true, doc: "Human-readable why this tool is irreversible (e.g., 'destroys data with no undo')." }
+  - { name: added_in_adr, type: string, required: true, doc: "ADR number that added this tool. New tools added without ADR amendment use the current ai_model_law.adr_ref." }
+  - { name: added_at, type: timestamp, required: true }
+  - { name: added_by_user_id, type: string, required: true, doc: "FK control.users(id). Who added the row (for audit)." }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: none
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_tool_id, columns: [tool_id], type: btree }
+  - { name: idx_namespace, columns: [namespace], type: btree }
+foreign_keys:
+  - { columns: [added_by_user_id], references: control.users(id) }

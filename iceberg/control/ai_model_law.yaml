@@ -1,0 +1,54 @@
+namespace: control
+table: ai_model_law
+description: |
+  Single-row config table encoding ADR-0007's model + autonomy law. Read by every Sitidos
+  service that invokes Anthropic; values populated at bootstrap by the central wrapper.
+
+  pinned_dated_id is runtime-discovered via anthropic.models.list() at first wrapper
+  bootstrap (D26 amended). Updated only via explicit "refresh" command; never silently
+  rotated. Production calls use pinned_dated_id for reproducibility; non-prod may use
+  current_canonical_alias.
+
+  forbidden_sdk_params + required_thinking_config + fast_mode + default_effort encode the
+  per-call SDK contract every wrapper MUST honor (D33, D34, D35, D36; lint rules R8/R9/R10).
+
+  Changes to this table MUST be accompanied by an ADR amendment. Lint rule R4 asserts no
+  other YAML or code mentions a model id != current_canonical_alias.
+
+  Singleton: exactly one row, id='current'. Historical rows preserved via Iceberg
+  time-travel; never DELETE.
+partition_by: []
+sort_by: [id]
+schema:
+  - { name: id, type: string, required: true, doc: "Always 'current'. Singleton row." }
+  - { name: current_canonical_alias, type: string, required: true, doc: "Anthropic model alias; ADR-0007 D26 = 'claude-opus-4-8'." }
+  - { name: pinned_dated_id, type: string, required: false, doc: "Anthropic-published dated id (e.g., 'claude-opus-4-8-20260528'). Runtime-discovered via anthropic.models.list() at wrapper bootstrap. Nullable until first discovery." }
+  - { name: pinned_dated_id_discovered_at, type: timestamp, required: false, doc: "When pinned_dated_id was populated; informational." }
+  - { name: provider, type: string, required: true, doc: "Anthropic provider channel. ADR-0007 D27 = 'anthropic_direct' only. Other values rejected at write time." }
+  - { name: adr_ref, type: string, required: true, doc: "ADR number this law was set by; e.g., '0007'. Updated on ADR amendment." }
+  - { name: effective_from, type: timestamp, required: true, doc: "When this law row became active." }
+  - { name: fast_mode, type: boolean, required: true, doc: "D33: speed='fast' on every Sitidos call. Default true." }
+  - { name: default_effort, type: string, required: true, doc: "D34: effort level. One of 'high'|'medium'|'low'. Default 'high' (Opus 4.8 Anthropic default)." }
+  - { name: context_window_tokens, type: int, required: true, doc: "Anthropic-published max context window for Opus 4.8 = 1_000_000 on Claude API direct." }
+  - { name: max_output_tokens_default, type: int, required: true, doc: "Anthropic-published max output tokens for Opus 4.8 = 128_000." }
+  - { name: prompt_cache_min_tokens, type: int, required: true, doc: "Minimum cacheable prompt length on Opus 4.8 = 1024 (lower than 4.7). Wrapper caching heuristics consult this." }
+  - { name: forbidden_sdk_params, type: "list<string>", required: true, doc: "D36: SDK params that return 400 on Opus 4.8. Seed: ['temperature','top_p','top_k','thinking.budget_tokens']. Lint rule R8 scans for these." }
+  - { name: required_thinking_config, type: string, required: true, doc: "D35: thinking mode wrapper MUST pass. Value: 'adaptive'." }
+  - { name: default_max_tool_calls, type: int, required: true, doc: "D31 default budget; per-surface may override." }
+  - { name: default_max_wall_time_sec, type: int, required: true, doc: "D31 default budget; per-surface may override." }
+  - { name: default_max_tokens_per_run, type: bigint, required: true, doc: "D31 default budget; sum of prompt + completion across all cycles in a run." }
+  - { name: default_max_cost_usd_per_run, type: decimal(12,4), required: true, doc: "D31 default budget; computed against Anthropic pricing." }
+  - { name: default_max_sub_agent_depth, type: int, required: true, doc: "D31/I19 default: max parent->child spawn depth." }
+  - { name: default_max_sub_agent_fanout, type: int, required: true, doc: "D31/I19 default: max concurrent children per parent." }
+  - { name: created_at, type: timestamp, required: true }
+  - { name: updated_at, type: timestamp, required: true }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: none
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+foreign_keys: []
