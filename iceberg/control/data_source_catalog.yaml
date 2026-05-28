@@ -1,0 +1,40 @@
+namespace: control
+table: data_source_catalog
+description: |
+  Sitidos-curated AND dynamically-refreshed catalog of data source connectors available in the App Store.
+  Per D10, every DuckDB community data-source extension appears here. F19 refreshes from the DuckDB community-extensions repo.
+  Per D13, display_name/description must NOT contain "DuckDB".
+partition_by: []
+sort_by: [id]
+schema:
+  - { name: id, type: string, required: true, doc: "Catalog id; stable; e.g., 'dataverse', 'postgres', 'gdrive', 'gsheets'" }
+  - { name: display_name, type: string, required: true, doc: "End-user-facing name; e.g., 'Microsoft Dataverse', 'PostgreSQL', 'Google Drive'" }
+  - { name: description, type: string, required: true, doc: "End-user-facing description; I4 ban applies" }
+  - { name: duckdb_extension_name, type: string, required: true, doc: "Engineering field; e.g., 'sitidos_dataverse' (D6 native; NOT erpl_web), 'postgres', 'gsheets'" }
+  - { name: extension_install_method, type: string, required: true, doc: "core | community | vendored" }
+  - { name: extension_version_pin, type: string, required: false, doc: "Pinned version or null for floating" }
+  - { name: extension_license, type: string, required: true, doc: "SPDX id or 'BSL-1.1' etc.; surfaces compatibility warnings in admin UI" }
+  - { name: permission_inheritance_contract, type: string, required: true, doc: "D9b: none | source_native_acl | idp_passthrough" }
+  - { name: cryptoshred_coverage, type: string, required: true, doc: "D4: full | partial | none" }
+  - { name: required_config_schema, type: string, required: true, doc: "JSON Schema for admin's setup form" }
+  - { name: secret_schema_openbao_path, type: string, required: true, doc: "OpenBao path template" }
+  - { name: arm64_supported, type: boolean, required: true, doc: "I5 gate; un-supported entries surface 'Not available in your region'" }
+  - { name: onboarded, type: boolean, required: true, doc: "Whether Sitidos has authored the permission-extractor adapter for F18 and the MCP tool generator templates" }
+  - { name: mcp_tool_prefix, type: string, required: true, doc: "Per D12; e.g., 'dataverse', 'postgres', 'gdrive'" }
+  - { name: cedar_policy_template_ref, type: string, required: false, doc: "Path in sitidos-contracts to the Cedar policy template" }
+  - { name: known_rate_limits, type: string, required: false, doc: "Free-form note; e.g., 'Dataverse: 6000 req / 5 min / user' (memo Q8)" }
+  - { name: source_metadata, type: string, required: false, doc: "JSON blob: maintainer, last_release_at, repo_url" }
+  - { name: created_at, type: timestamp, required: true }
+  - { name: updated_at, type: timestamp, required: true }
+  - { name: removed_at, type: timestamp, required: false }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: none
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_onboarded, columns: [onboarded], type: btree }
+foreign_keys: []

@@ -1,0 +1,39 @@
+namespace: identity
+table: principals
+description: |
+  Auth0 user mirror, projected via Management API. 1:1 with control.users (control.users is the Sitidos-side
+  index; identity.principals is the richer mirror with provider-side metadata). Refreshed by F18's Auth0
+  log-stream consumer on every Auth0 user event.
+partition_by: [days(created_at)]
+sort_by: [id]
+schema:
+  - { name: id, type: string, required: true, doc: "Auth0 user_id; e.g., 'auth0|abc123', 'samlp|conn|xyz', 'oauth2|google-oauth2|...'" }
+  - { name: sitidos_user_id, type: string, required: true, doc: "FK control.users(id)" }
+  - { name: connection, type: string, required: true, doc: "Auth0 connection name (e.g., 'Username-Password-Authentication', 'google-oauth2'); engineering field, not surfaced (D13)" }
+  - { name: email, type: string, required: true }
+  - { name: email_verified, type: boolean, required: true }
+  - { name: name, type: string, required: false }
+  - { name: nickname, type: string, required: false }
+  - { name: picture, type: string, required: false }
+  - { name: identities_json, type: string, required: false, doc: "JSON-encoded Auth0 identities array; for users with linked identities across providers" }
+  - { name: app_metadata_json, type: string, required: false, doc: "JSON-encoded Auth0 app_metadata; may contain normalized groups/roles per memo Q12" }
+  - { name: user_metadata_json, type: string, required: false }
+  - { name: last_login_at, type: timestamp, required: false }
+  - { name: logins_count, type: int, required: false }
+  - { name: created_at, type: timestamp, required: true }
+  - { name: updated_at, type: timestamp, required: true }
+  - { name: blocked, type: boolean, required: true, doc: "Auth0 user block status" }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: none
+  key_ref_column: null
+  doc: "Auth0 mirror data is treated as global metadata; cryptoshred semantics applied at workspace_memberships level"
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_sitidos_user, columns: [sitidos_user_id], type: btree }
+  - { name: idx_email, columns: [email], type: btree }
+foreign_keys:
+  - { columns: [sitidos_user_id], references: control.users(id) }

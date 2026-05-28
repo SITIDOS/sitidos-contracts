@@ -1,0 +1,38 @@
+namespace: identity
+table: claim_snapshots
+description: |
+  Per-session snapshot of the user's upstream claims at session creation time. Indexed for fast on-demand
+  re-evaluation diffing — when D9a/D9b require fresh checks, we compare the live upstream claim set against
+  the snapshot to detect change. Stored encrypted under the workspace key (cryptoshred boundary).
+partition_by: [days(captured_at), bucket(16, sitidos_user_id)]
+sort_by: [captured_at]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; cs_..." }
+  - { name: sitidos_user_id, type: string, required: true, doc: "FK control.users(id)" }
+  - { name: org_id, type: string, required: true }
+  - { name: workspace_id, type: string, required: false, doc: "Set when snapshot is taken at workspace-JWT issue time" }
+  - { name: iss_provider, type: string, required: true }
+  - { name: auth0_connection_id, type: string, required: true, doc: "FK identity.connections(auth0_connection_id)" }
+  - { name: id_token_claims_json, type: string, required: true, doc: "JSON-encoded ID token claims (groups, roles, custom claims)" }
+  - { name: access_token_claims_json, type: string, required: false }
+  - { name: normalized_groups_json, type: string, required: true, doc: "Canonical https://sitidos.app/groups array per memo Q12" }
+  - { name: normalized_roles_json, type: string, required: true, doc: "Canonical https://sitidos.app/roles array" }
+  - { name: claim_hash, type: string, required: true, doc: "SHA-256 of (normalized_groups + normalized_roles); cheap diff key" }
+  - { name: captured_at, type: timestamp, required: true }
+  - { name: superseded_by_id, type: string, required: false, doc: "FK identity.claim_snapshots(id); set when a newer snapshot replaces this" }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_user_time, columns: [sitidos_user_id, captured_at], type: btree }
+  - { name: idx_user_hash, columns: [sitidos_user_id, claim_hash], type: btree, doc: "Cheap unchanged-claims short-circuit" }
+foreign_keys:
+  - { columns: [sitidos_user_id], references: control.users(id) }
+  - { columns: [org_id], references: control.orgs(id) }
+  - { columns: [workspace_id], references: control.workspaces(id) }
+  - { columns: [auth0_connection_id], references: identity.connections(auth0_connection_id) }

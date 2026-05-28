@@ -1,0 +1,42 @@
+namespace: identity
+table: sessions
+description: |
+  Session log derived from Auth0 log stream (sent to our /api/auth/logstream endpoint, HMAC-verified, then materialized).
+  Captures login / logout / token refresh events. Indexed for audit, fraud detection, and on-demand claim re-evaluation
+  (looks up the most recent valid session for a user when computing membership freshness per D9b/I3).
+partition_by: [days(occurred_at), bucket(16, sitidos_user_id)]
+sort_by: [occurred_at]
+schema:
+  - { name: id, type: string, required: true, doc: "Auth0 log id; type-prefixed (e.g., 's:..." }
+  - { name: auth0_user_id, type: string, required: true, doc: "FK identity.principals(id)" }
+  - { name: sitidos_user_id, type: string, required: true, doc: "FK control.users(id)" }
+  - { name: org_id, type: string, required: false, doc: "FK control.orgs(id); set when Auth0 Organization context is present" }
+  - { name: workspace_id, type: string, required: false, doc: "FK control.workspaces(id); set when JWT was workspace-scoped" }
+  - { name: event_type, type: string, required: true, doc: "Auth0 log type code; e.g., 's' (login success), 'f' (failure), 'slo' (single logout), 'fp' (forgot password)" }
+  - { name: iss_connection, type: string, required: true, doc: "Auth0 connection name; e.g., 'Username-Password-Authentication'" }
+  - { name: iss_provider, type: string, required: true, doc: "Normalized provider id from data_source_catalog; per D12 carried in JWT" }
+  - { name: client_id, type: string, required: false }
+  - { name: client_ip, type: string, required: false }
+  - { name: user_agent, type: string, required: false }
+  - { name: location_country, type: string, required: false }
+  - { name: location_city, type: string, required: false }
+  - { name: claim_snapshot_id, type: string, required: false, doc: "FK identity.claim_snapshots(id) captured at this session" }
+  - { name: occurred_at, type: timestamp, required: true }
+  - { name: raw_log_json, type: string, required: false, doc: "Raw Auth0 log payload for forensic replay; PII-scrubbed" }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+  doc: "Encrypted under workspace_id key when workspace_id is set; under org key otherwise"
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_user_time, columns: [sitidos_user_id, occurred_at], type: btree }
+  - { name: idx_workspace_time, columns: [workspace_id, occurred_at], type: btree }
+foreign_keys:
+  - { columns: [auth0_user_id], references: identity.principals(id) }
+  - { columns: [sitidos_user_id], references: control.users(id) }
+  - { columns: [org_id], references: control.orgs(id) }
+  - { columns: [workspace_id], references: control.workspaces(id) }

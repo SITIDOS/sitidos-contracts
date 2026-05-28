@@ -1,0 +1,28 @@
+namespace: identity
+table: connections
+description: |
+  Auth0 connection mirror. Projected via Management API; tracks every Auth0 connection provisioned for any Sitidos Org.
+  Cross-referenced from control.org_identity_connections and control.workspace_identity_connections_added via auth0_connection_id.
+partition_by: []
+sort_by: [auth0_connection_id]
+schema:
+  - { name: auth0_connection_id, type: string, required: true, doc: "Auth0 connection id; con_..." }
+  - { name: name, type: string, required: true, doc: "Auth0 connection name; engineering field" }
+  - { name: strategy, type: string, required: true, doc: "auth0 | google-oauth2 | waad | samlp | okta | etc." }
+  - { name: org_id_list_json, type: string, required: true, doc: "JSON array of Sitidos org_ids that have enabled this connection (Auth0 supports enabling one connection across many Orgs)" }
+  - { name: enabled_clients_json, type: string, required: true, doc: "JSON array of Auth0 client_ids" }
+  - { name: options_json, type: string, required: false, doc: "JSON-encoded connection options (signing certs, metadata URLs, etc.); no secrets" }
+  - { name: created_at, type: timestamp, required: true }
+  - { name: updated_at, type: timestamp, required: true }
+  - { name: deleted_at, type: timestamp, required: false }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: none
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [auth0_connection_id], type: btree }
+  - { name: idx_strategy, columns: [strategy], type: btree }
+foreign_keys: []

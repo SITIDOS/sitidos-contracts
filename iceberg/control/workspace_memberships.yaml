@@ -1,0 +1,38 @@
+namespace: control
+table: workspace_memberships
+description: |
+  Materialized cache of derived workspace memberships. NOT the source of truth.
+  Per D14, "user is a member of workspace W" iff the workspace has an enabled auth provider whose claims for that
+  user satisfy the workspace's membership_claim filter. This table caches the latest evaluation per (user, workspace)
+  for fast switcher queries; the cryptographic gate at MCP-call time always re-evaluates against fresh upstream claims
+  for idp_inherited cases (I3).
+partition_by: [bucket(16, workspace_id)]
+sort_by: [workspace_id, user_id]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; wsm_..." }
+  - { name: workspace_id, type: string, required: true, doc: "FK control.workspaces(id)" }
+  - { name: user_id, type: string, required: true, doc: "FK control.users(id)" }
+  - { name: org_id, type: string, required: true, doc: "Denormalized from workspace; FK control.orgs(id)" }
+  - { name: source_connector, type: string, required: true, doc: "Which auth provider's claim granted membership; e.g., 'entra', 'google', 'okta', 'saml', 'bootstrap'" }
+  - { name: evidence_claim, type: string, required: true, doc: "Which specific claim (group name, app role, etc.) granted membership" }
+  - { name: evidence_session_id, type: string, required: false, doc: "FK identity.sessions(id) at derivation time" }
+  - { name: derived_at, type: timestamp, required: true }
+  - { name: lease_until, type: timestamp, required: true, doc: "Cache freshness; Cedar must re-evaluate after this for I3 contracts" }
+  - { name: created_at, type: timestamp, required: true }
+  - { name: revoked_at, type: timestamp, required: false }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_ws_user, columns: [workspace_id, user_id], type: btree }
+  - { name: idx_user, columns: [user_id], type: btree }
+  - { name: idx_user_org, columns: [user_id, org_id], type: btree, doc: "Switcher query" }
+foreign_keys:
+  - { columns: [workspace_id], references: control.workspaces(id) }
+  - { columns: [user_id], references: control.users(id) }
+  - { columns: [org_id], references: control.orgs(id) }

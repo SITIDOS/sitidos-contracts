@@ -1,0 +1,29 @@
+namespace: control
+table: orgs
+description: Sitidos Org (customer entity). One Auth0 Organization per row. Cryptoshred boundary for org-scoped metadata.
+partition_by: [days(created_at)]
+sort_by: [id]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; org_..." }
+  - { name: slug, type: string, required: true, doc: "URL identity per D16; ^[a-z0-9-]+$; unique" }
+  - { name: display_name, type: string, required: true }
+  - { name: auth0_org_id, type: string, required: true, doc: "Auth0 Organization id (org_xxx); 1:1 per D11" }
+  - { name: vercel_alias_id, type: string, required: false, doc: "Vercel project alias for ${slug}.sitidos.app; provisioned by F20" }
+  - { name: cf_dns_record_id, type: string, required: false, doc: "Cloudflare DNS record id for ${slug}.sitidos.app" }
+  - { name: key_handle, type: string, required: true, doc: "OpenBao key ref: org/${id}/key" }
+  - { name: bootstrap_admin_user_id, type: string, required: false, doc: "Auth0 user id of Org creator; null once upstream admin mapping configured (D17)" }
+  - { name: created_at, type: timestamp, required: true }
+  - { name: updated_at, type: timestamp, required: true }
+  - { name: deleted_at, type: timestamp, required: false, doc: "Tombstone; deletion iterates workspaces and shreds them per D15" }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: org
+  key_ref_column: key_handle
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_slug, columns: [slug], type: btree }
+  - { name: idx_auth0_org, columns: [auth0_org_id], type: btree }
+foreign_keys: []

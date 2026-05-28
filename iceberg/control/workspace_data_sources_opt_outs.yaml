@@ -1,0 +1,26 @@
+namespace: control
+table: workspace_data_sources_opt_outs
+description: Workspace-level opt-outs of org-inherited data sources. Per Q2.
+partition_by: [bucket(16, workspace_id)]
+sort_by: [workspace_id, org_data_source_id]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; wsdso_..." }
+  - { name: workspace_id, type: string, required: true, doc: "FK control.workspaces(id)" }
+  - { name: org_data_source_id, type: string, required: true, doc: "FK control.org_data_sources(id) being opted out" }
+  - { name: opted_out_by_user_id, type: string, required: true, doc: "FK control.users(id)" }
+  - { name: opted_out_at, type: timestamp, required: true }
+  - { name: reinstated_at, type: timestamp, required: false }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_ws, columns: [workspace_id], type: btree }
+foreign_keys:
+  - { columns: [workspace_id], references: control.workspaces(id) }
+  - { columns: [org_data_source_id], references: control.org_data_sources(id) }
+  - { columns: [opted_out_by_user_id], references: control.users(id) }

@@ -1,0 +1,34 @@
+namespace: control
+table: identity_connection_catalog
+description: |
+  Sitidos-curated AND dynamically-refreshed catalog of auth provider connection types available in the App Store.
+  Per D10, every Auth0-supported connection type appears here. F19 refreshes this from Auth0 Management API.
+  Per D13, the display_name and description must NOT contain the string "Auth0".
+partition_by: []
+sort_by: [id]
+schema:
+  - { name: id, type: string, required: true, doc: "Catalog id; stable; e.g., 'entra-oidc', 'google-workspace', 'okta-oidc', 'saml-generic'" }
+  - { name: display_name, type: string, required: true, doc: "End-user-facing name; e.g., 'Microsoft Entra ID' (I4)" }
+  - { name: description, type: string, required: true, doc: "End-user-facing description; I4 ban applies" }
+  - { name: auth0_connection_strategy, type: string, required: true, doc: "Engineering field; e.g., 'waad', 'google-oauth2', 'okta', 'samlp'" }
+  - { name: role_claim_contract, type: string, required: true, doc: "D9a: idp_groups | idp_app_roles | saml_claims | none" }
+  - { name: required_config_schema, type: string, required: true, doc: "JSON Schema string for the admin's setup form (client_id, tenant_id, metadata_url, etc.)" }
+  - { name: secret_schema_openbao_path, type: string, required: true, doc: "OpenBao path template: workspace/${ws}/connections/${conn}/" }
+  - { name: arm64_supported, type: boolean, required: true, doc: "Always true for Auth0-brokered connections; field kept for parity with data sources" }
+  - { name: onboarded, type: boolean, required: true, doc: "Per D10, all appear; this flags whether Sitidos has authored the role-extractor adapter for F18" }
+  - { name: standard_claim_groups, type: string, required: false, doc: "Default groups claim name from this IdP (memo Q12); e.g., 'user.groups'" }
+  - { name: standard_claim_roles, type: string, required: false, doc: "Default roles claim name; e.g., 'user.app_metadata.roles'" }
+  - { name: setup_playbook_url, type: string, required: false, doc: "Doc URL for IdP-specific gotchas (e.g., Azure AD Extended Attributes)" }
+  - { name: created_at, type: timestamp, required: true }
+  - { name: updated_at, type: timestamp, required: true }
+  - { name: removed_at, type: timestamp, required: false, doc: "Set when the connection type is deprecated upstream" }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: none
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+foreign_keys: []

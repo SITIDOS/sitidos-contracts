@@ -1,0 +1,29 @@
+namespace: control
+table: workspace_identity_connections_added
+description: Workspace-level auth provider additions on top of the org-inherited set. Effective set = (org_enabled ∪ workspace_added) − workspace_opt_outs.
+partition_by: [bucket(16, workspace_id)]
+sort_by: [workspace_id, catalog_id]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; wsica_..." }
+  - { name: workspace_id, type: string, required: true, doc: "FK control.workspaces(id)" }
+  - { name: catalog_id, type: string, required: true, doc: "FK control.identity_connection_catalog(id)" }
+  - { name: instance_label, type: string, required: false }
+  - { name: config_ref, type: string, required: true, doc: "OpenBao path: workspace/${ws}/auth_providers/${id}/" }
+  - { name: auth0_connection_id, type: string, required: true }
+  - { name: enabled_by_user_id, type: string, required: true, doc: "FK control.users(id)" }
+  - { name: enabled_at, type: timestamp, required: true }
+  - { name: disabled_at, type: timestamp, required: false }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_ws, columns: [workspace_id], type: btree }
+foreign_keys:
+  - { columns: [workspace_id], references: control.workspaces(id) }
+  - { columns: [catalog_id], references: control.identity_connection_catalog(id) }
+  - { columns: [enabled_by_user_id], references: control.users(id) }

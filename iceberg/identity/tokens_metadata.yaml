@@ -1,0 +1,40 @@
+namespace: identity
+table: tokens_metadata
+description: |
+  Metadata for issued workspace-scoped JWTs (D8/§8). NO secret material — only headers, claims summary, audience,
+  expiration, refresh chain. Used for revocation audit, replay detection, and on-demand claim diffing.
+partition_by: [days(issued_at), bucket(16, sitidos_user_id)]
+sort_by: [issued_at]
+schema:
+  - { name: jti, type: string, required: true, doc: "JWT ID; ULID; tk_..." }
+  - { name: sitidos_user_id, type: string, required: true, doc: "FK control.users(id)" }
+  - { name: org_id, type: string, required: true, doc: "FK control.orgs(id)" }
+  - { name: workspace_id, type: string, required: true, doc: "FK control.workspaces(id)" }
+  - { name: audience, type: string, required: true, doc: "mcp.${workspace_id}.sitidos.app (D16)" }
+  - { name: iss_provider, type: string, required: true, doc: "Per D12" }
+  - { name: claim_snapshot_id, type: string, required: true, doc: "FK identity.claim_snapshots(id); the snapshot baked into this JWT" }
+  - { name: scopes_json, type: string, required: true, doc: "JSON array of scopes" }
+  - { name: groups_json, type: string, required: true, doc: "Normalized https://sitidos.app/groups claim baked in (D9a cache)" }
+  - { name: roles_json, type: string, required: true, doc: "Normalized https://sitidos.app/roles claim baked in" }
+  - { name: gen_cursor, type: long, required: true, doc: "Workspace gen_cursor at issue time" }
+  - { name: parent_jti, type: string, required: false, doc: "Refresh chain pointer" }
+  - { name: issued_at, type: timestamp, required: true }
+  - { name: expires_at, type: timestamp, required: true }
+  - { name: revoked_at, type: timestamp, required: false }
+  - { name: revoke_reason, type: string, required: false }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_jti, columns: [jti], type: btree }
+  - { name: idx_user_time, columns: [sitidos_user_id, issued_at], type: btree }
+  - { name: idx_workspace_time, columns: [workspace_id, issued_at], type: btree }
+  - { name: idx_revoked, columns: [revoked_at], type: btree }
+foreign_keys:
+  - { columns: [sitidos_user_id], references: control.users(id) }
+  - { columns: [org_id], references: control.orgs(id) }
+  - { columns: [workspace_id], references: control.workspaces(id) }

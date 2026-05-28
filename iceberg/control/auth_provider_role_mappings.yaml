@@ -1,0 +1,40 @@
+namespace: control
+table: auth_provider_role_mappings
+description: |
+  Upstream-claim → Sitidos-concept mapping. The only place where "Sitidos concepts" map to provider claim strings (D14).
+  Pure declarative config; not a role system. Rows declare: for this (org_or_workspace, connection), the claim 'X' from
+  the auth provider corresponds to Sitidos concept 'Y'. Concepts include:
+    - app_store_admin_claim   (I7 gate: who can edit App Store config)
+    - workspace_member_claim  (who derives workspace_memberships rows)
+    - data_access_claim       (I8/D19 gate: who can call any tool on the given data source)
+partition_by: [bucket(16, scope_id)]
+sort_by: [scope_id, connection_ref]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; aprm_..." }
+  - { name: scope_type, type: string, required: true, doc: "'org' | 'workspace'" }
+  - { name: scope_id, type: string, required: true, doc: "FK control.orgs(id) or control.workspaces(id) per scope_type" }
+  - { name: connection_ref_type, type: string, required: true, doc: "'org_identity_connection' | 'workspace_identity_connection_added'" }
+  - { name: connection_ref, type: string, required: true, doc: "FK to the corresponding connection row" }
+  - { name: concept, type: string, required: true, doc: "'app_store_admin_claim' | 'workspace_member_claim' | 'data_access_claim' | <custom>" }
+  - { name: data_source_id, type: string, required: false, doc: "FK to org_data_sources or workspace_data_sources_added; required when concept='data_access_claim'" }
+  - { name: claim_path, type: string, required: true, doc: "Dotted path inside the upstream claim payload; e.g., 'groups', 'roles', 'app_metadata.groups'" }
+  - { name: claim_match_kind, type: string, required: true, doc: "'eq' | 'in' | 'regex' | 'contains'" }
+  - { name: claim_match_value, type: string, required: true, doc: "Value(s) to match; JSON-encoded array if claim_match_kind='in'" }
+  - { name: configured_by_user_id, type: string, required: true, doc: "FK control.users(id)" }
+  - { name: created_at, type: timestamp, required: true }
+  - { name: updated_at, type: timestamp, required: true }
+  - { name: deleted_at, type: timestamp, required: false }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+  doc: "When scope_type='org', stored under org key; when 'workspace', under workspace key. Materializer decides per row."
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_scope, columns: [scope_type, scope_id], type: btree }
+  - { name: idx_scope_concept, columns: [scope_type, scope_id, concept], type: btree }
+foreign_keys:
+  - { columns: [configured_by_user_id], references: control.users(id) }

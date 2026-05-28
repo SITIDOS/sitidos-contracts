@@ -1,0 +1,30 @@
+namespace: control
+table: org_identity_connections
+description: Org-level auth provider enables. Inherited by all workspaces under the org unless overridden via opt-out (workspace_identity_connections_opt_outs). Per D-overlay union semantics.
+partition_by: [bucket(16, org_id)]
+sort_by: [org_id, catalog_id]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; orgic_..." }
+  - { name: org_id, type: string, required: true, doc: "FK control.orgs(id)" }
+  - { name: catalog_id, type: string, required: true, doc: "FK control.identity_connection_catalog(id)" }
+  - { name: instance_label, type: string, required: false, doc: "Admin's friendly name when same connector enabled twice" }
+  - { name: config_ref, type: string, required: true, doc: "OpenBao path to config + secrets; e.g., org/${org_id}/auth_providers/${id}/" }
+  - { name: auth0_connection_id, type: string, required: true, doc: "Auth0 connection id provisioned for this Org" }
+  - { name: enabled, type: boolean, required: true }
+  - { name: enabled_by_user_id, type: string, required: true, doc: "FK control.users(id)" }
+  - { name: enabled_at, type: timestamp, required: true }
+  - { name: disabled_at, type: timestamp, required: false }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: org
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_org, columns: [org_id], type: btree }
+foreign_keys:
+  - { columns: [org_id], references: control.orgs(id) }
+  - { columns: [catalog_id], references: control.identity_connection_catalog(id) }
+  - { columns: [enabled_by_user_id], references: control.users(id) }
