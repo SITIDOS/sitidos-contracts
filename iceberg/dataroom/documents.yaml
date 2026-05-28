@@ -1,0 +1,39 @@
+namespace: dataroom
+table: documents
+description: |
+  Documents inside a data room. Distinct from esign.documents (which are signature-flow artifacts).
+  Originals stored in R2 at ${workspace_id}/dataroom/${room_id}/${id}.${ext}.
+  Watermarked variants generated on-demand and cached at ${workspace_id}/dataroom/${room_id}/${id}.wm.${viewer_user_id}.pdf.
+partition_by: [bucket(32, workspace_id)]
+sort_by: [room_id, created_at]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; drdoc_..." }
+  - { name: room_id, type: string, required: true }
+  - { name: workspace_id, type: string, required: true, doc: "Denormalized from room for partitioning" }
+  - { name: name, type: string, required: true }
+  - { name: mime_type, type: string, required: true }
+  - { name: size_bytes, type: long, required: true }
+  - { name: r2_key, type: string, required: true }
+  - { name: page_count, type: int, required: false, doc: "For PDFs/docs; null for non-paginated formats" }
+  - { name: sha256, type: string, required: true, doc: "Integrity check on upload" }
+  - { name: uploaded_by_user_id, type: string, required: true }
+  - { name: virus_scan_status, type: string, required: true, doc: "'pending' | 'clean' | 'infected' | 'error'" }
+  - { name: virus_scan_at, type: timestamp, required: false }
+  - { name: created_at, type: timestamp, required: true }
+  - { name: updated_at, type: timestamp, required: true }
+  - { name: deleted_at, type: timestamp, required: false }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_room_created, columns: [room_id, created_at], type: btree }
+  - { name: idx_sha256, columns: [sha256], type: btree }
+foreign_keys:
+  - { columns: [room_id], references: dataroom.rooms(id) }
+  - { columns: [workspace_id], references: control.workspaces(id) }
+  - { columns: [uploaded_by_user_id], references: control.users(id) }

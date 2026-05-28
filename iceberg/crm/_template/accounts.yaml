@@ -1,0 +1,41 @@
+namespace: crm._template
+table: accounts
+description: |
+  CRM account (organization/company). Template schema; see ./README.md.
+  Canonical source: Dataverse `accounts` entity (per D6). Projection handled by sitidos-data Dataverse
+  connector at view-creation time.
+partition_by: [bucket(16, workspace_id)]
+sort_by: [created_at]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID for native; for crm.dataverse this is the Dataverse accountid (GUID)" }
+  - { name: workspace_id, type: string, required: true }
+  - { name: external_id, type: string, required: false, doc: "Upstream system id when sourced from Dataverse/Salesforce/etc." }
+  - { name: name, type: string, required: true }
+  - { name: account_type, type: string, required: false, doc: "'customer' | 'prospect' | 'partner' | 'vendor' | 'other'" }
+  - { name: industry, type: string, required: false }
+  - { name: website, type: string, required: false }
+  - { name: phone, type: string, required: false }
+  - { name: email, type: string, required: false }
+  - { name: billing_address_json, type: string, required: false }
+  - { name: shipping_address_json, type: string, required: false }
+  - { name: owner_user_external_id, type: string, required: false, doc: "Canonical projection of Dataverse _ownerid_value" }
+  - { name: annual_revenue, type: double, required: false }
+  - { name: employee_count, type: int, required: false }
+  - { name: status, type: string, required: false }
+  - { name: source_system, type: string, required: true, doc: "'dataverse' | 'salesforce' | 'hubspot' | 'native'" }
+  - { name: created_at, type: timestamp, required: true }
+  - { name: updated_at, type: timestamp, required: true }
+  - { name: deleted_at, type: timestamp, required: false }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_ws_external, columns: [workspace_id, external_id], type: btree }
+  - { name: idx_name, columns: [workspace_id, name], type: btree }
+foreign_keys:
+  - { columns: [workspace_id], references: control.workspaces(id) }

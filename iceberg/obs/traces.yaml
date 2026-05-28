@@ -1,0 +1,40 @@
+namespace: obs
+table: traces
+description: |
+  OTel spans (one row per span). Aggregated to traces via trace_id at query time.
+  Per F15: OTel-collector → parquet-writer pipeline lands here every 30s. Hot spans (<24h)
+  also held in valkey for sub-second tail-sampling UI (F16 V-Observability).
+partition_by: [days(start_time), bucket(32, workspace_id)]
+sort_by: [start_time]
+schema:
+  - { name: trace_id, type: string, required: true, doc: "W3C traceparent trace-id (32 hex)" }
+  - { name: span_id, type: string, required: true, doc: "W3C span-id (16 hex)" }
+  - { name: parent_span_id, type: string, required: false }
+  - { name: workspace_id, type: string, required: false }
+  - { name: org_id, type: string, required: false }
+  - { name: service, type: string, required: true }
+  - { name: operation_name, type: string, required: true, doc: "e.g. 'mcp.tool.invoke', 'rpc.workspace.create'" }
+  - { name: span_kind, type: string, required: true, doc: "'server' | 'client' | 'producer' | 'consumer' | 'internal'" }
+  - { name: start_time, type: timestamp, required: true }
+  - { name: end_time, type: timestamp, required: true }
+  - { name: duration_ms, type: long, required: true, doc: "Pre-computed end-start for fast aggregation" }
+  - { name: status_code, type: string, required: true, doc: "'unset' | 'ok' | 'error'" }
+  - { name: status_message, type: string, required: false }
+  - { name: attributes_json, type: string, required: false }
+  - { name: events_json, type: string, required: false, doc: "Span events array (JSON-stringified)" }
+  - { name: links_json, type: string, required: false, doc: "Span links array (JSON-stringified)" }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_trace, columns: [trace_id], type: btree }
+  - { name: idx_span, columns: [span_id], type: btree }
+  - { name: idx_ws_op_time, columns: [workspace_id, operation_name, start_time], type: btree }
+  - { name: idx_duration, columns: [duration_ms], type: btree }
+foreign_keys:
+  - { columns: [workspace_id], references: control.workspaces(id) }
+  - { columns: [org_id], references: control.orgs(id) }

@@ -1,0 +1,44 @@
+namespace: crm._template
+table: opportunities
+description: |
+  CRM sales opportunity. Template schema; see ./README.md.
+  Canonical source: Dataverse `opportunities` entity.
+partition_by: [bucket(16, workspace_id)]
+sort_by: [created_at]
+schema:
+  - { name: id, type: string, required: true }
+  - { name: workspace_id, type: string, required: true }
+  - { name: external_id, type: string, required: false }
+  - { name: account_id, type: string, required: false }
+  - { name: primary_contact_id, type: string, required: false }
+  - { name: name, type: string, required: true }
+  - { name: description, type: string, required: false }
+  - { name: stage, type: string, required: false, doc: "'qualification' | 'proposal' | 'negotiation' | 'closed_won' | 'closed_lost'" }
+  - { name: probability_pct, type: int, required: false }
+  - { name: amount, type: double, required: false }
+  - { name: currency, type: string, required: false, doc: "ISO 4217" }
+  - { name: close_date, type: timestamp, required: false }
+  - { name: actual_close_date, type: timestamp, required: false }
+  - { name: outcome, type: string, required: false, doc: "'won' | 'lost' | 'cancelled' | null while open" }
+  - { name: lost_reason, type: string, required: false }
+  - { name: owner_user_external_id, type: string, required: false }
+  - { name: source_system, type: string, required: true }
+  - { name: created_at, type: timestamp, required: true }
+  - { name: updated_at, type: timestamp, required: true }
+  - { name: deleted_at, type: timestamp, required: false }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_ws_stage, columns: [workspace_id, stage], type: btree }
+  - { name: idx_account, columns: [account_id], type: btree }
+  - { name: idx_close_date, columns: [workspace_id, close_date], type: btree }
+foreign_keys:
+  - { columns: [workspace_id], references: control.workspaces(id) }
+  - { columns: [account_id], references: crm._template.accounts(id) }
+  - { columns: [primary_contact_id], references: crm._template.contacts(id) }

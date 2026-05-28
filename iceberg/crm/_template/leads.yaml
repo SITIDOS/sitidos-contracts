@@ -1,0 +1,48 @@
+namespace: crm._template
+table: leads
+description: |
+  CRM lead (unqualified prospect). Template schema; see ./README.md.
+  Canonical source: Dataverse `leads` entity.
+partition_by: [bucket(16, workspace_id)]
+sort_by: [created_at]
+schema:
+  - { name: id, type: string, required: true }
+  - { name: workspace_id, type: string, required: true }
+  - { name: external_id, type: string, required: false }
+  - { name: first_name, type: string, required: false }
+  - { name: last_name, type: string, required: false }
+  - { name: full_name, type: string, required: false }
+  - { name: company_name, type: string, required: false }
+  - { name: email, type: string, required: false }
+  - { name: phone, type: string, required: false }
+  - { name: job_title, type: string, required: false }
+  - { name: lead_source, type: string, required: false }
+  - { name: status, type: string, required: false, doc: "'new' | 'contacted' | 'qualified' | 'unqualified' | 'converted'" }
+  - { name: rating, type: string, required: false, doc: "'hot' | 'warm' | 'cold'" }
+  - { name: estimated_value, type: double, required: false }
+  - { name: currency, type: string, required: false }
+  - { name: owner_user_external_id, type: string, required: false }
+  - { name: converted_at, type: timestamp, required: false }
+  - { name: converted_account_id, type: string, required: false }
+  - { name: converted_contact_id, type: string, required: false }
+  - { name: converted_opportunity_id, type: string, required: false }
+  - { name: source_system, type: string, required: true }
+  - { name: created_at, type: timestamp, required: true }
+  - { name: updated_at, type: timestamp, required: true }
+  - { name: deleted_at, type: timestamp, required: false }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_ws_status, columns: [workspace_id, status], type: btree }
+  - { name: idx_email, columns: [workspace_id, email], type: btree }
+foreign_keys:
+  - { columns: [workspace_id], references: control.workspaces(id) }
+  - { columns: [converted_account_id], references: crm._template.accounts(id) }
+  - { columns: [converted_contact_id], references: crm._template.contacts(id) }
+  - { columns: [converted_opportunity_id], references: crm._template.opportunities(id) }

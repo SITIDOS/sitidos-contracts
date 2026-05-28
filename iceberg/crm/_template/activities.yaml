@@ -1,0 +1,43 @@
+namespace: crm._template
+table: activities
+description: |
+  CRM activity (task / call / email / meeting / note). Template schema; see ./README.md.
+  Canonical source: Dataverse `activitypointer` polymorphic entity + child entity types.
+partition_by: [days(activity_time), bucket(16, workspace_id)]
+sort_by: [activity_time]
+schema:
+  - { name: id, type: string, required: true }
+  - { name: workspace_id, type: string, required: true }
+  - { name: external_id, type: string, required: false }
+  - { name: activity_type, type: string, required: true, doc: "'task' | 'call' | 'email' | 'meeting' | 'note' | 'other'" }
+  - { name: subject, type: string, required: true }
+  - { name: description, type: string, required: false }
+  - { name: status, type: string, required: false, doc: "'open' | 'in_progress' | 'completed' | 'cancelled'" }
+  - { name: priority, type: string, required: false, doc: "'low' | 'normal' | 'high'" }
+  - { name: activity_time, type: timestamp, required: true, doc: "Scheduled or actual time of activity" }
+  - { name: duration_minutes, type: int, required: false }
+  - { name: completed_at, type: timestamp, required: false }
+  - { name: regarding_entity_type, type: string, required: false, doc: "'account' | 'contact' | 'opportunity' | 'lead'" }
+  - { name: regarding_entity_id, type: string, required: false }
+  - { name: assigned_user_external_id, type: string, required: false }
+  - { name: created_by_user_external_id, type: string, required: false }
+  - { name: participants_json, type: string, required: false, doc: "Array of {type, id, name} for meetings/calls" }
+  - { name: email_metadata_json, type: string, required: false, doc: "from/to/cc/subject/message_id when activity_type='email'" }
+  - { name: source_system, type: string, required: true }
+  - { name: created_at, type: timestamp, required: true }
+  - { name: updated_at, type: timestamp, required: true }
+  - { name: deleted_at, type: timestamp, required: false }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_ws_time, columns: [workspace_id, activity_time], type: btree }
+  - { name: idx_regarding, columns: [regarding_entity_type, regarding_entity_id], type: btree }
+  - { name: idx_assigned, columns: [workspace_id, assigned_user_external_id], type: btree }
+foreign_keys:
+  - { columns: [workspace_id], references: control.workspaces(id) }
