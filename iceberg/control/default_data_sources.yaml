@@ -1,0 +1,47 @@
+namespace: control
+table: default_data_sources
+description: |
+  Per-workspace registry of sitidos-native default data sources that ship with every workspace
+  and are NOT listed in control.data_source_catalog (per ADR-0006 D20, D25, I10).
+
+  Default data sources use permission_inheritance_contract='sitidos_native' (D21) — they have
+  no upstream IdP to inherit from and are exempt from D19's data_access_claim requirement (D23).
+  They are NOT opt-out-able by workspace admins (D20): a workspace bootstrap is incomplete until
+  a row exists here for every system-shipped default source (I9), and rows MUST NOT be deleted
+  (use disabled_at if temporarily disabling for ops reasons; product policy is that this column
+  stays null in normal operation).
+
+  Currently the only system-shipped default source is the Data Room (source_prefix='dataroom'),
+  per D22. Future additions go through ADR amendment, not catalog onboarding.
+
+  Distinct from control.workspace_data_sources_added: that table is for admin-opt-in catalog
+  sources (D10 overlay model). This table is for the implicit, always-on, system-shipped sources
+  that exist before any admin action.
+
+  F20 (org service) inserts the row(s) here as the final step of workspace bootstrap (I9). F19
+  (App Store) linter MUST reject any data_source_catalog row whose source_prefix matches one
+  registered here (I10 — no sitidos_native in catalog). F4 fact-builder reads this table to
+  decide whether to take the sitidos_native fast-path (<100ms, no upstream check) or the
+  D9b on-demand permissions path.
+partition_by: [bucket(16, workspace_id)]
+sort_by: [workspace_id, source_prefix]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; ddsrc_..." }
+  - { name: workspace_id, type: string, required: true, doc: "FK control.workspaces(id)" }
+  - { name: source_prefix, type: string, required: true, doc: "Stable system identifier of the default source, e.g. 'dataroom'. MUST match a system-registered default source; F19 linter enforces no overlap with data_source_catalog.source_prefix (I10). Used by F4 fact-builder to route to the sitidos_native fast-path and by F5 MCP surface to auto-register the source's MCP tools." }
+  - { name: enabled_at, type: timestamp, required: true, doc: "Set at workspace bootstrap by F20; never null. Marks the moment the default source became live for this workspace." }
+  - { name: disabled_at, type: timestamp, required: false, doc: "Ops-only kill switch. Product policy: stays null in normal operation. When non-null, F4 treats the source as if absent (no sitidos_native fast-path) and F5 unregisters its MCP tools for this workspace. Admins cannot set this via UI; D20 forbids opt-out." }
+  - { name: created_at, type: timestamp, required: true }
+  - { name: updated_at, type: timestamp, required: true }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_ws_source, columns: [workspace_id, source_prefix], type: btree }
+foreign_keys:
+  - { columns: [workspace_id], references: control.workspaces(id) }

@@ -3,6 +3,13 @@ table: watermark_events
 description: |
   Watermark application audit trail. One row per (document, viewer, render_request).
   Powers data-room forensics: "who viewed which document when, with which watermark applied."
+
+  ADR-0006 D24 scope clarification: Watermark events only exist for viewer_type='human_browser'
+  access (see dataroom.download_events.viewer_type). MCP/RPC fetches (viewer_type='mcp_client'
+  or 'rpc_api') NEVER render a watermark and therefore NEVER produce a watermark_events row;
+  they only produce a dataroom.download_events row. Forensic queries that join
+  download_events ⨝ watermark_events on (document_id, viewer_*) MUST treat absence of a
+  watermark_events row for an MCP/RPC download_event as expected, not as a data-quality defect.
 partition_by: [days(rendered_at), bucket(16, workspace_id)]
 sort_by: [rendered_at]
 schema:
