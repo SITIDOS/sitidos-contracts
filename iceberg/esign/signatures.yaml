@@ -1,0 +1,45 @@
+namespace: esign
+table: signatures
+description: |
+  Cryptographic signature events. PAdES-B-T signatures via FreeTSA timestamps (F11). Tier-1 inline via pdf-lib +
+  node-signpdf + @signpdf/signer-p12; Tier-2 via Documenso fork callbacks. OpenBao PKI mints per-workspace cert
+  chained to Sitidos root at pki.sitidos.app/root.crt.
+partition_by: [days(signed_at), bucket(16, document_id)]
+sort_by: [signed_at]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; sig_..." }
+  - { name: document_id, type: string, required: true, doc: "FK esign.documents(id)" }
+  - { name: recipient_id, type: string, required: true, doc: "FK esign.recipients(id)" }
+  - { name: workspace_id, type: string, required: true }
+  - { name: signer_user_id, type: string, required: false, doc: "FK control.users(id); null for external recipients" }
+  - { name: signature_kind, type: string, required: true, doc: "'tier_1_pdf_lib' | 'tier_2_documenso'" }
+  - { name: signer_certificate_serial, type: string, required: true, doc: "OpenBao PKI cert serial" }
+  - { name: signer_certificate_subject, type: string, required: true }
+  - { name: ts_authority, type: string, required: true, doc: "'freetsa' | <other RFC 3161 TSA>" }
+  - { name: ts_token_ref, type: string, required: true, doc: "R2 path to RFC 3161 timestamp token" }
+  - { name: ts_signed_at, type: timestamp, required: true, doc: "Timestamp from TSA" }
+  - { name: hash_algorithm, type: string, required: true, doc: "'sha256' | 'sha384' | 'sha512'" }
+  - { name: document_hash_before, type: string, required: true, doc: "Hex SHA of doc before sig embed" }
+  - { name: document_hash_after, type: string, required: true, doc: "Hex SHA of doc after sig embed" }
+  - { name: signer_ip, type: string, required: false }
+  - { name: signer_user_agent, type: string, required: false }
+  - { name: signer_geo, type: string, required: false }
+  - { name: consent_text, type: string, required: false, doc: "Click-through consent text shown to signer" }
+  - { name: consent_at, type: timestamp, required: false }
+  - { name: signed_at, type: timestamp, required: true }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_doc_time, columns: [document_id, signed_at], type: btree }
+  - { name: idx_recipient, columns: [recipient_id], type: btree }
+foreign_keys:
+  - { columns: [document_id], references: esign.documents(id) }
+  - { columns: [recipient_id], references: esign.recipients(id) }
+  - { columns: [workspace_id], references: control.workspaces(id) }
+  - { columns: [signer_user_id], references: control.users(id) }

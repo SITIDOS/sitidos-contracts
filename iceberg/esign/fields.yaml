@@ -1,0 +1,38 @@
+namespace: esign
+table: fields
+description: Form fields placed on documents (signature, initials, date, text, checkbox). Coordinates relative to page.
+partition_by: [bucket(16, document_id)]
+sort_by: [document_id, page, sort_index]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; fld_..." }
+  - { name: document_id, type: string, required: true, doc: "FK esign.documents(id)" }
+  - { name: workspace_id, type: string, required: true }
+  - { name: recipient_id, type: string, required: true, doc: "FK esign.recipients(id)" }
+  - { name: kind, type: string, required: true, doc: "'signature' | 'initials' | 'date' | 'text' | 'checkbox' | 'dropdown'" }
+  - { name: page, type: int, required: true, doc: "1-based PDF page number" }
+  - { name: x, type: double, required: true, doc: "Normalized 0-1" }
+  - { name: y, type: double, required: true }
+  - { name: width, type: double, required: true }
+  - { name: height, type: double, required: true }
+  - { name: required, type: boolean, required: true }
+  - { name: sort_index, type: int, required: true }
+  - { name: meta_json, type: string, required: false, doc: "Field-kind-specific metadata (dropdown options, default value)" }
+  - { name: value_json, type: string, required: false, doc: "Filled value; populated when recipient signs" }
+  - { name: filled_at, type: timestamp, required: false }
+  - { name: created_at, type: timestamp, required: true }
+  - { name: updated_at, type: timestamp, required: true }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_doc_page, columns: [document_id, page], type: btree }
+  - { name: idx_recipient, columns: [recipient_id], type: btree }
+foreign_keys:
+  - { columns: [document_id], references: esign.documents(id) }
+  - { columns: [workspace_id], references: control.workspaces(id) }
+  - { columns: [recipient_id], references: esign.recipients(id) }

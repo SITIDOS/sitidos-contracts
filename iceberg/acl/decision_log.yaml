@@ -1,0 +1,44 @@
+namespace: acl
+table: decision_log
+description: |
+  Cedar policy decision audit log. One row per MCP tool call (and per Hono RPC call when authorization-bearing).
+  Captures principals, action, resource, claims-at-evaluation, matched policies, decision. Sufficient to reconstruct
+  why a given access was allowed or denied for compliance review.
+partition_by: [days(decided_at), bucket(16, workspace_id)]
+sort_by: [decided_at]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; dec_..." }
+  - { name: workspace_id, type: string, required: true }
+  - { name: org_id, type: string, required: true }
+  - { name: principal_user_id, type: string, required: true }
+  - { name: action, type: string, required: true, doc: "'mcp:dataverse.read' | 'rpc:dataroom.create' | etc." }
+  - { name: resource_kind, type: string, required: true }
+  - { name: resource_id, type: string, required: false }
+  - { name: source_connector, type: string, required: false }
+  - { name: claim_snapshot_id, type: string, required: false, doc: "FK identity.claim_snapshots(id)" }
+  - { name: matched_policies_json, type: string, required: true, doc: "JSON array of policy ids that produced the decision" }
+  - { name: decision, type: string, required: true, doc: "'allow' | 'deny'" }
+  - { name: deny_reason, type: string, required: false }
+  - { name: upstream_check_performed, type: boolean, required: true, doc: "True if D9b on-demand check was executed inside this decision" }
+  - { name: upstream_latency_ms, type: int, required: false, doc: "Round-trip to upstream IdP/source for the check" }
+  - { name: total_latency_ms, type: int, required: true }
+  - { name: jti, type: string, required: true, doc: "FK identity.tokens_metadata(jti)" }
+  - { name: trace_id, type: string, required: false, doc: "OTel trace id; joins to obs.traces" }
+  - { name: decided_at, type: timestamp, required: true }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_user_time, columns: [principal_user_id, decided_at], type: btree }
+  - { name: idx_ws_action_time, columns: [workspace_id, action, decided_at], type: btree }
+  - { name: idx_decision, columns: [decision, decided_at], type: btree }
+  - { name: idx_trace, columns: [trace_id], type: btree }
+foreign_keys:
+  - { columns: [workspace_id], references: control.workspaces(id) }
+  - { columns: [org_id], references: control.orgs(id) }
+  - { columns: [principal_user_id], references: control.users(id) }

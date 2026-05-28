@@ -1,0 +1,31 @@
+namespace: esign
+table: templates
+description: Reusable document templates (default Sitidos NDA + workspace overrides). Per ADR-0005 V-DataRoom section.
+partition_by: [bucket(16, workspace_id)]
+sort_by: [workspace_id, name]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; tpl_..." }
+  - { name: workspace_id, type: string, required: false, doc: "FK control.workspaces(id); null for system templates (Sitidos default NDA)" }
+  - { name: scope, type: string, required: true, doc: "'system' | 'workspace'" }
+  - { name: name, type: string, required: true }
+  - { name: description, type: string, required: false }
+  - { name: document_data_ref, type: string, required: true, doc: "R2 path to template PDF" }
+  - { name: fields_json, type: string, required: true, doc: "Field definitions JSON (kind, position, recipient role)" }
+  - { name: created_by_user_id, type: string, required: false }
+  - { name: created_at, type: timestamp, required: true }
+  - { name: updated_at, type: timestamp, required: true }
+  - { name: deleted_at, type: timestamp, required: false }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+  doc: "System templates carry key_binding=none operationally; binding resolved at write time"
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_ws_scope, columns: [workspace_id, scope], type: btree }
+foreign_keys:
+  - { columns: [workspace_id], references: control.workspaces(id) }
+  - { columns: [created_by_user_id], references: control.users(id) }

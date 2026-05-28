@@ -1,0 +1,30 @@
+namespace: esign
+table: audit_log
+description: Append-only audit log for every esign event. Sufficient to reconstruct full signing history for legal evidence.
+partition_by: [days(occurred_at), bucket(16, document_id)]
+sort_by: [occurred_at]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; eal_..." }
+  - { name: document_id, type: string, required: true, doc: "FK esign.documents(id)" }
+  - { name: workspace_id, type: string, required: true }
+  - { name: event_type, type: string, required: true, doc: "'created' | 'sent' | 'opened' | 'signed' | 'declined' | 'cancelled' | 'expired' | 'reminder_sent' | 'completed' | 'voided'" }
+  - { name: actor_kind, type: string, required: true, doc: "'user' | 'recipient' | 'system'" }
+  - { name: actor_id, type: string, required: false, doc: "user_id or recipient_id depending on actor_kind" }
+  - { name: actor_email, type: string, required: false }
+  - { name: actor_ip, type: string, required: false }
+  - { name: actor_user_agent, type: string, required: false }
+  - { name: meta_json, type: string, required: false, doc: "Event-specific payload" }
+  - { name: occurred_at, type: timestamp, required: true }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: null
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_doc_time, columns: [document_id, occurred_at], type: btree }
+foreign_keys:
+  - { columns: [document_id], references: esign.documents(id) }
+  - { columns: [workspace_id], references: control.workspaces(id) }
