@@ -1,0 +1,48 @@
+namespace: control
+table: workspace_ai_tool_policy
+description: |
+  Per-workspace overrides for MCP tool autonomy posture per ADR-0007 I17.
+
+  Default-autonomous posture (I17 / founder choice 2026-05-29): absence of a row for a
+  given (workspace_id, tool_id) means the tool is autonomous_allowed in that workspace.
+
+  Workspace admins can opt specific tools into human-gating or full denial by inserting
+  a row here. Wrapper checks this table at tool-dispatch time:
+  - policy='autonomous_allowed' → tool callable from autonomous loops (default if no row).
+  - policy='human_gated' → tool wrapped in confirmation token; autonomous calls fail
+    unless a recent human confirmation row exists (mechanism TBD in F5 implementation).
+  - policy='denied' → tool is stripped from the tool surface entirely for this workspace.
+
+  Irreversible-registry tools (control/ai_irreversible_tools per I16) override this table:
+  even a row here with policy='autonomous_allowed' for an irreversible tool is REJECTED
+  at write time. Irreversible tools are always effectively human_gated regardless.
+
+  Per-row provenance recorded (set_by_user_id, set_at, reason) for audit.
+
+  Append-with-tombstone model: superseded_at marks a row as no longer in effect (latest
+  un-superseded row per (workspace_id, tool_id) wins). Never DELETE; preserves audit trail.
+partition_by: [bucket(16, workspace_id)]
+sort_by: [workspace_id, tool_id, set_at]
+schema:
+  - { name: id, type: string, required: true, doc: "ULID; watp_..." }
+  - { name: workspace_id, type: string, required: true, doc: "FK control.workspaces(id)." }
+  - { name: tool_id, type: string, required: true, doc: "MCP tool id (e.g., 'dataroom.list_documents'). MUST NOT be a tool listed in control/ai_irreversible_tools with policy='autonomous_allowed' (I16 enforcement at write time)." }
+  - { name: policy, type: string, required: true, doc: "I17: 'autonomous_allowed'|'human_gated'|'denied'." }
+  - { name: set_by_user_id, type: string, required: true, doc: "FK control.users(id). Who set this policy (workspace admin)." }
+  - { name: set_at, type: timestamp, required: true }
+  - { name: reason, type: string, required: false, doc: "Optional admin-supplied justification." }
+  - { name: superseded_at, type: timestamp, required: false, doc: "Tombstone: when a newer row for (workspace_id, tool_id) replaced this row. Wrapper filters to where superseded_at IS NULL for the active policy." }
+  - { name: created_at, type: timestamp, required: true }
+properties:
+  format-version: "2"
+  write.format.default: parquet
+  write.parquet.compression-codec: zstd
+cryptoshred:
+  key_binding: workspace
+  key_ref_column: workspace_id
+indexes_duckdb:
+  - { name: idx_id, columns: [id], type: btree }
+  - { name: idx_ws_tool_active, columns: [workspace_id, tool_id, superseded_at], type: btree, doc: "Active-row lookup at tool dispatch time." }
+foreign_keys:
+  - { columns: [workspace_id], references: control.workspaces(id) }
+  - { columns: [set_by_user_id], references: control.users(id) }
