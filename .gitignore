@@ -1,0 +1,12 @@
+# Build artifacts
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# OS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/

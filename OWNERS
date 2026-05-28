@@ -1,0 +1,12 @@
+# sitidos-contracts owners
+
+F9 — Contract steward (sole merger)
+
+Every V-* vertical may PROPOSE schema/contract changes via PR.
+F9 reviews for backward compatibility + SemVer correctness + cross-repo impact.
+
+Breaking changes require:
+1. Major version bump
+2. BREAKING_CHANGES.md entry
+3. Migration note in the PR body
+4. Sign-off from every affected consumer repo's OWNERS
